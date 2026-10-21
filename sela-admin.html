@@ -86,6 +86,15 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .bottom-nav button{flex:1;border:0;background:none;color:var(--muted);padding:9px 2px;font-size:.68rem;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:2px}
 .bottom-nav button span{font-size:1.3rem}.bottom-nav button.on{color:var(--primary-d);font-weight:800}
 .chips{display:flex;gap:8px;overflow-x:auto}.chip{border:1.5px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:inherit;font-size:.88rem;white-space:nowrap}.chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer}
+.avatar{overflow:hidden}
+
+.banner{background:#f59e0b;color:#111;padding:8px 12px;border-radius:10px;margin-top:8px;font-size:.88rem;font-weight:600}
+.call .obs-grid{position:relative;z-index:1;margin:90px 0 110px;overflow:auto;display:grid;gap:8px;padding:8px;grid-template-columns:1fr 1fr}
+.obs-tile video{width:100%;background:#000;border-radius:12px;max-height:45vh}
+.gallery video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}
+.bubble video{max-width:100%;border-radius:12px;max-height:320px}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -314,6 +323,7 @@ if (!configured) showConfigHelp(root, "Sela Admin");
 else onAuthStateChanged(auth, async (u) => {
   clean();
   if (!u) return mount(root, loginView("Sela Admin", "Khusus admin. Masuk dengan nomor telepon admin."));
+  if (u.phoneNumber !== "+6283899891468") return mount(root, denied(u, "Panel ini hanya untuk nomor admin Sela (083899891468)."));
   mount(root, loadingView("Memeriksa hak akses admin…"));
   try {
     // Hak admin ditentukan dokumen admins/{uid} di server (hanya bisa dibuat lewat Firebase Console).
@@ -334,14 +344,14 @@ function denied(u, extra) {
 /* ======================= PANEL ======================= */
 function startAdmin(admin) {
   const aid = admin.uid;
-  const D = { users: [], reqs: [], members: [], profiles: {}, calls: [], reports: [], online: {}, group: {}, msgCount: null, msgToday: null };
+  const D = { messages: [], users: [], reqs: [], members: [], profiles: {}, calls: [], reports: [], online: {}, group: {}, msgCount: null, msgToday: null };
   const notes = []; let loaded = {}; let tab = "dash"; let filter = "pending"; let search = "";
   const content = h("div", { class: "stack" });
   const nav = h("nav", { class: "bottom-nav" });
   const nameOf = (id) => D.profiles[id]?.displayName || D.users.find((u) => u.uid === id)?.displayName || id.slice(0, 6);
   const phoneState = new Set();
 
-  const TABS = [["dash", "📊", "Ringkas"], ["reqs", "📥", "Permintaan"], ["members", "👥", "Anggota"], ["monitor", "📡", "Pantau"], ["notif", "🔔", "Notif"], ["settings", "⚙️", "Grup"]];
+  const TABS = [["dash", "📊", "Ringkas"], ["reqs", "📥", "Permintaan"], ["members", "👥", "Anggota"], ["monitor", "📡", "Pantau"], ["media", "🖼", "Media"], ["notif", "🔔", "Notif"], ["settings", "⚙️", "Grup"]];
   function drawNav() {
     const pend = D.reqs.filter((r) => r.status === "pending").length;
     nav.replaceChildren(...TABS.map(([k, ic, t]) => h("button", { class: tab === k ? "on" : "", onclick: () => { tab = k; render(); } }, h("span", {}, ic), t + (k === "reqs" && pend ? ` (${pend})` : ""))));
@@ -370,9 +380,8 @@ function startAdmin(admin) {
     (c) => { if (c.type === "added" || c.type === "modified") { const r = c.doc.data(); if (r.status === "pending") addNote("Permintaan bergabung baru dari " + nameOf(c.doc.id)); } });
   watch("members", query(collection(db, "groupMembers"), where("groupId", "==", GROUP_ID)), (s) => (D.members = s.docs.map((d) => ({ id: d.id, ...d.data() }))),
     (c) => { if (c.type === "added") addNote("Anggota baru: " + nameOf(c.doc.data().uid)); });
+  watch("messages", query(collection(db, "messages"), where("groupId", "==", GROUP_ID), orderBy("createdAt", "desc"), limit(60)), (s) => (D.messages = s.docs.map((d) => ({ id: d.id, ...d.data() }))));
   watch("calls", query(collection(db, "calls"), orderBy("createdAt", "desc"), limit(50)), (s) => (D.calls = s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-  watch("reports", query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(100)), (s) => (D.reports = s.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    (c) => { if (c.type === "added") addNote("Laporan pesan baru"); });
   cleanups.push(onSnapshot(doc(db, "groups", GROUP_ID), (s) => { D.group = s.exists() ? s.data() : {}; if (tab === "settings") render(); }, fail));
   cleanups.push(onValue(dRef(rtdb, "status"), (s) => { D.online = {}; s.forEach((c) => { D.online[c.key] = c.val().state === "online"; }); render(); }, () => {}));
   async function counts() {
@@ -482,21 +491,80 @@ function startAdmin(admin) {
 
   function monitor() {
     const dur = (c) => { const a = c.startedAt?.toMillis?.(), b = c.endedAt?.toMillis?.(); return a && b ? Math.round((b - a) / 1000) + " dtk" : "-"; };
-    const open = D.reports.filter((r) => r.status === "open");
-    return [h("div", { class: "stats" }, stat(D.msgCount, "Total pesan"), stat(D.msgToday, "Pesan 24 jam"), stat(Object.values(D.online).filter(Boolean).length, "Pengguna online"), stat(open.length, "Laporan terbuka")),
-      h("p", { class: "muted small" }, "Dasbor ini hanya menampilkan metadata layanan. Isi panggilan tidak direkam dan tidak dapat disadap. Konten pesan hanya ditinjau lewat laporan."),
-      h("h3", {}, "Laporan pesan"),
-      D.reports.length ? D.reports.map((r) => h("div", { class: "card stack" },
-        h("div", { class: "row" }, h("b", { class: "grow" }, "Dilaporkan: " + (r.snapshot?.senderName || "?")), statusBadge(r.status)),
-        h("div", { class: "muted small" }, "Pelapor: " + nameOf(r.reporterUid) + " · " + fmtDateTime(r.createdAt)),
-        h("div", {}, "Alasan: " + r.reason),
-        h("div", { class: "quote" }, r.snapshot?.messageType && r.snapshot.messageType !== "text" ? "[" + r.snapshot.messageType + "] " : "", r.snapshot?.text || ""),
-        r.status === "open" ? h("div", { class: "row wrap" },
-          h("button", { class: "btn ghost small", onclick: async () => { try { await updateDoc(doc(db, "reports", r.id), { status: "resolved", reviewedBy: aid }); audit("resolve_report", r.id); } catch (e) { fail(e); } } }, "Tandai selesai"),
-          h("button", { class: "btn danger small", onclick: async () => { if (!confirm("Hapus pesan ini dari grup?")) return; try { await deleteDoc(doc(db, "messages", r.messageId)); await updateDoc(doc(db, "reports", r.id), { status: "resolved", reviewedBy: aid }); audit("delete_message", r.messageId); toast("Pesan dihapus", "good"); } catch (e) { fail(e); } } }, "Hapus pesan")) : null)) : h("p", { class: "muted" }, "Belum ada laporan."),
+    const live = D.calls.filter((c) => c.status === "accepted" && !c.endedAt && c.startedAt && Date.now() - c.startedAt.toMillis() < 4 * 3600e3);
+    return [h("div", { class: "stats" }, stat(D.msgCount, "Total pesan"), stat(D.msgToday, "Pesan 24 jam"), stat(Object.values(D.online).filter(Boolean).length, "Pengguna online"), stat(live.length, "Panggilan aktif")),
+      h("h3", {}, "Panggilan berlangsung"),
+      live.length ? live.map((c) => h("div", { class: "list-item" }, h("div", { class: "grow" }, h("b", {}, nameOf(c.callerUid) + " ↔ " + nameOf(c.receiverUid)), h("div", { class: "muted small" }, c.video ? "Video" : "Suara")),
+        h("button", { class: "btn primary small", onclick: () => observe(c) }, "👁 Gabung (pantau)"))) : h("p", { class: "muted" }, "Tidak ada panggilan berlangsung."),
+      h("p", { class: "muted small" }, "Saat Anda bergabung, kedua peserta langsung melihat pemberitahuan \"Admin Sela bergabung sebagai pemantau\". Anda tidak mengirim kamera/mikrofon dan panggilan tidak direkam."),
       h("h3", {}, "Riwayat panggilan (50 terbaru)"),
       D.calls.length ? D.calls.map((c) => h("div", { class: "list-item" }, h("div", { class: "grow" }, h("b", {}, nameOf(c.callerUid) + " → " + nameOf(c.receiverUid)),
         h("div", { class: "muted small" }, "Mulai " + fmtDateTime(c.startedAt || c.createdAt) + " · selesai " + fmtDateTime(c.endedAt) + " · " + dur(c))), h("span", { class: "badge" }, c.status))) : h("p", { class: "muted" }, "Belum ada panggilan.")];
+  }
+
+  const obs = { callId: null, pcs: [], unsubs: [], el: null };
+  async function observe(c) {
+    if (obs.callId) return toast("Anda sudah memantau satu panggilan.", "err");
+    obs.callId = c.id;
+    const grid = h("div", { class: "obs-grid" });
+    const leave = h("button", { class: "btn danger" }, "Keluar dari panggilan");
+    obs.el = h("div", { class: "call" }, h("div", { class: "top" }, h("b", {}, "👁 Memantau (tanpa kamera & mikrofon)"), h("div", {}, nameOf(c.callerUid) + " ↔ " + nameOf(c.receiverUid) + " · peserta diberi tahu")), grid, h("div", { class: "ctrls" }, leave));
+    document.body.append(obs.el);
+    leave.onclick = stopObserve;
+    try {
+      await setDoc(doc(db, "calls", c.id, "observers", aid), { adminUid: aid, joinedAt: serverTimestamp() });
+      audit("observe_call", c.id, { caller: c.callerUid, receiver: c.receiverUid });
+      obs.unsubs.push(onSnapshot(doc(db, "calls", c.id), (s) => { if (s.data()?.status !== "accepted") { toast("Panggilan berakhir."); stopObserve(); } }));
+      for (const peer of [c.callerUid, c.receiverUid]) await attachPeer(c, peer, grid);
+    } catch (e) { fail(e); stopObserve(); }
+  }
+  async function attachPeer(c, peer, grid) {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS }); obs.pcs.push(pc);
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    if (c.video) pc.addTransceiver("video", { direction: "recvonly" });
+    const v = h("video", { autoplay: true, playsinline: true });
+    grid.append(h("div", { class: "obs-tile" }, v, h("div", { class: "small", style: "text-align:center" }, nameOf(peer))));
+    pc.ontrack = (e) => { v.srcObject = e.streams[0]; };
+    const pref = doc(db, "calls", c.id, "obsPeers", peer), cand = collection(pref, "cand");
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: "admin", ...e.candidate.toJSON() }).catch(() => {}); };
+    const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+    await setDoc(pref, { offer: { type: offer.type, sdp: offer.sdp }, answer: null });
+    const pending = [];
+    obs.unsubs.push(onSnapshot(pref, (s) => {
+      const d = s.data();
+      if (d?.answer && !pc.currentRemoteDescription) pc.setRemoteDescription(new RTCSessionDescription(d.answer)).then(() => pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}))).catch(() => {});
+    }));
+    obs.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== "member") return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    })));
+  }
+  function stopObserve() {
+    if (!obs.callId) return; const id = obs.callId; obs.callId = null;
+    obs.unsubs.splice(0).forEach((f) => { try { f(); } catch {} });
+    obs.pcs.splice(0).forEach((p) => { try { p.close(); } catch {} });
+    obs.el?.remove(); obs.el = null;
+    deleteDoc(doc(db, "calls", id, "observers", aid)).catch(() => {});
+  }
+
+  function media() {
+    const items = D.messages.filter((m) => m.imageData || m.videoData);
+    return [h("p", { class: "muted small" }, "Foto dan video yang dikirim ke grup (60 pesan terbaru). Hapus yang melanggar aturan atau keluarkan pengirimnya."),
+      items.length ? h("div", { class: "gallery" }, items.map((m) => m.videoData ? h("video", { src: m.videoData, muted: true, preload: "metadata", onclick: () => mediaDetail(m) }) : h("img", { src: m.imageData, alt: "", onclick: () => mediaDetail(m) }))) : h("p", { class: "muted" }, "Belum ada foto atau video.")];
+  }
+  function mediaDetail(m) {
+    let close = () => {};
+    const del = h("button", { class: "btn danger" }, "Hapus foto/pesan");
+    del.onclick = async () => {
+      if (!confirm("Hapus pesan ini dari grup?")) return; del.disabled = true;
+      try { await deleteDoc(doc(db, "messages", m.id)); audit("delete_message", m.id, { senderUid: m.senderUid, reason: "moderasi media" }); toast("Dihapus", "good"); close(); }
+      catch (e) { fail(e); del.disabled = false; }
+    };
+    const kick = h("button", { class: "btn ghost", onclick: () => { close(); const mem = D.members.find((x) => x.uid === m.senderUid); if (mem) setMemberStatus(mem, "removed", "Keluarkan"); else toast("Pengirim bukan anggota aktif", "err"); } }, "Keluarkan pengirim dari grup");
+    close = openSheet("Foto dari " + nameOf(m.senderUid), h("div", { class: "stack" },
+      (m.videoData ? h("video", { src: m.videoData, controls: true, playsinline: true, style: "width:100%;border-radius:12px" }) : h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px" })),
+      m.text ? h("p", {}, m.text) : null, h("div", { class: "muted small" }, fmtDateTime(m.createdAt)), del, kick));
   }
 
   function notif() {
@@ -543,7 +611,7 @@ function startAdmin(admin) {
     if (!["users", "reqs", "members"].every((k) => loaded[k])) { content.replaceChildren(h("div", { class: "spinner", style: "margin:40px auto" })); drawNav(); return; }
     const active = document.activeElement;
     if (tab === "settings" && active && ["INPUT", "TEXTAREA"].includes(active.tagName) && content.contains(active)) return; // jangan hapus ketikan admin
-    const fn = { dash, reqs, members, monitor, notif, settings }[tab];
+    const fn = { dash, reqs, members, monitor, media, notif, settings }[tab];
     content.replaceChildren(...[fn()].flat(Infinity)); drawNav();
   }
   render();
