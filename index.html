@@ -86,6 +86,15 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .bottom-nav button{flex:1;border:0;background:none;color:var(--muted);padding:9px 2px;font-size:.68rem;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:2px}
 .bottom-nav button span{font-size:1.3rem}.bottom-nav button.on{color:var(--primary-d);font-weight:800}
 .chips{display:flex;gap:8px;overflow-x:auto}.chip{border:1.5px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:inherit;font-size:.88rem;white-space:nowrap}.chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer}
+.avatar{overflow:hidden}
+
+.banner{background:#f59e0b;color:#111;padding:8px 12px;border-radius:10px;margin-top:8px;font-size:.88rem;font-weight:600}
+.call .obs-grid{position:relative;z-index:1;margin:90px 0 110px;overflow:auto;display:grid;gap:8px;padding:8px;grid-template-columns:1fr 1fr}
+.obs-tile video{width:100%;background:#000;border-radius:12px;max-height:45vh}
+.gallery video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}
+.bubble video{max-width:100%;border-radius:12px;max-height:320px}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -341,13 +350,19 @@ class CallManager {
     const local = h("video", { class: "local", autoplay: true, playsinline: true, muted: true });
     local.muted = true;
     const status = h("div", {}, "Menghubungkan…");
+    const banner = h("div", { class: "banner hidden" });
     const ctrls = h("div", { class: "ctrls" });
-    const el = h("div", { class: "call" }, remote, withVideo ? local : null, h("div", { class: "top" }, h("b", {}, title), status), ctrls);
+    const el = h("div", { class: "call" }, remote, withVideo ? local : null, h("div", { class: "top" }, h("b", {}, title), status, banner), ctrls);
     this.root.append(el);
-    this.ui = { el, remote, local, status, ctrls };
+    this.ui = { el, remote, local, status, ctrls, banner };
     return this.ui;
   }
   closeUI() { this.ui?.el.remove(); this.ui = null; }
+  setBanner(t, ms) {
+    const b = this.ui?.banner; if (!b) return;
+    b.textContent = t || ""; b.classList.toggle("hidden", !t);
+    if (ms) setTimeout(() => { if (b.textContent === t) { b.textContent = ""; b.classList.add("hidden"); } }, ms);
+  }
   setStatus(t) { if (this.ui) this.ui.status.textContent = t; }
 
   controls(withVideo) {
@@ -410,11 +425,59 @@ class CallManager {
         else this.pending.push(c.doc.data());
       });
     }, () => {}));
+    this.watchObservers(callId);
     return pc;
   }
   async setRemote(desc) {
     await this.pc.setRemoteDescription(new RTCSessionDescription(desc));
     (this.pending || []).splice(0).forEach((c) => this.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {}));
+  }
+  /* Admin bergabung sebagai pemantau: SELALU diumumkan ke peserta lewat banner. Admin hanya menerima, tidak mengirim kamera/mikrofon. */
+  watchObservers(callId) {
+    this.obsPeers = {};
+    this.unsubCall(onSnapshot(collection(this.db, "calls", callId, "observers"), (snap) => {
+      snap.docChanges().forEach((c) => {
+        const aid = c.doc.id;
+        if (c.type === "added") {
+          this.setBanner("👁 Admin Sela bergabung sebagai pemantau (admin tidak mengirim suara/video).");
+          toast("Admin Sela bergabung sebagai pemantau panggilan ini.");
+          this.servePeer(callId, aid);
+        } else if (c.type === "removed") {
+          this.closePeer(aid); this.setBanner("Admin Sela keluar dari panggilan.", 5000);
+        }
+      });
+    }, () => {}));
+  }
+  servePeer(callId, aid) {
+    this.closePeer(aid);
+    const pref = doc(this.db, "calls", callId, "obsPeers", this.uid);
+    const cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const rec = { pc, unsubs: [] }; this.obsPeers[aid] = rec;
+    this.local?.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: "member", ...e.candidate.toJSON() }).catch(() => {}); };
+    const pending = []; let handled = null;
+    rec.unsubs.push(onSnapshot(pref, async (s) => {
+      const d = s.data();
+      if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+      handled = d.offer.sdp;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+        pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+        await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+      } catch {}
+    }, () => {}));
+    rec.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== "admin") return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+  }
+  closePeer(aid) {
+    const r = this.obsPeers?.[aid]; if (!r) return;
+    r.unsubs.forEach((f) => { try { f(); } catch {} }); try { r.pc.close(); } catch {}
+    delete this.obsPeers[aid];
   }
   unsubCall(f) { (this.callUnsubs ||= []).push(f); }
 
@@ -485,6 +548,7 @@ class CallManager {
   cleanup() {
     this.ended = true; clearTimeout(this.ringTimer); clearTimeout(this.discTimer);
     (this.callUnsubs || []).forEach((f) => { try { f(); } catch {} }); this.callUnsubs = [];
+    Object.keys(this.obsPeers || {}).forEach((k) => this.closePeer(k));
     try { this.pc?.close(); } catch {} this.pc = null;
     this.local?.getTracks().forEach((t) => t.stop()); this.local = null;
     this.callId = null; this.closeUI();
@@ -762,9 +826,11 @@ function chatView(S, user) {
 
   const headSub = h("span", { class: "muted small" });
   const avatar = g.photoURL ? h("img", { class: "avatar", src: g.photoURL, alt: "" }) : h("div", { class: "avatar" }, "S");
+  avatar.addEventListener("click", () => openGroup());
   function updateHead() { const on = members.filter((m) => online[m.uid]).length; headSub.textContent = `${members.length} anggota · ${on} online`; }
   const head = h("div", { class: "chat-head" }, avatar,
-    h("div", { class: "title", onclick: openMembers }, h("b", {}, g.name || "Grup Sela"), headSub),
+    h("div", { class: "title", onclick: openGroup }, h("b", {}, g.name || "Grup Sela"), headSub),
+    h("button", { class: "icon-btn", "aria-label": "Galeri", onclick: openGallery }, "🖼"),
     h("button", { class: "icon-btn", "aria-label": "Panggilan suara", onclick: () => pickPeer(false) }, "📞"),
     h("button", { class: "icon-btn", "aria-label": "Video call", onclick: () => pickPeer(true) }, "🎥"),
     h("button", { class: "icon-btn", "aria-label": "Tema", onclick: toggleTheme }, "🌓"),
@@ -773,11 +839,12 @@ function chatView(S, user) {
   const list = h("div", { class: "msgs" });
   const replyBar = h("div", { class: "replybar hidden" });
   const input = h("textarea", { rows: "1", placeholder: "Tulis pesan…", "aria-label": "Pesan" });
-  const fileInput = h("input", { type: "file", accept: "image/*", class: "hidden" });
+  const fileInput = h("input", { type: "file", accept: "image/*,video/*", class: "hidden" });
   const sendBtn = h("button", { class: "send", "aria-label": "Kirim" }, "➤");
   const composer = h("div", { class: "composer" },
     h("button", { class: "icon-btn", onclick: openEmoji, "aria-label": "Emoji" }, "😊"),
-    h("button", { class: "icon-btn", onclick: () => fileInput.click(), "aria-label": "Lampirkan" }, "📎"),
+    h("button", { class: "icon-btn", onclick: () => fileInput.click(), "aria-label": "Lampirkan foto" }, "📎"),
+    h("button", { class: "icon-btn", onclick: recordVideo, "aria-label": "Rekam video" }, "🎥"),
     input, sendBtn, fileInput);
 
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 110) + "px"; });
@@ -799,12 +866,13 @@ function chatView(S, user) {
     try { await addDoc(collection(db, "messages"), base("text", text, null, rt)); }
     catch (e) { input.value = text; toast("Pesan gagal terkirim: " + friendlyError(e), "err"); }
   }
-  function base(type, text, imageData, rt) {
-    return { groupId: GROUP_ID, senderUid: uid, messageType: type, text: text || "", imageData: imageData || null, createdAt: serverTimestamp(), replyTo: rt || null, reactions: {}, readBy: {} };
+  function base(type, text, imageData, rt, videoData) {
+    return { groupId: GROUP_ID, senderUid: uid, messageType: type, text: text || "", imageData: imageData || null, videoData: videoData || null, createdAt: serverTimestamp(), replyTo: rt || null, reactions: {}, readBy: {} };
   }
 
   async function previewMedia(file) {
-    if (!file.type.startsWith("image/")) return toast("Hanya foto yang didukung. Video dimatikan karena tanpa Storage.", "err");
+    if (file.type.startsWith("video/")) return previewVideo(file);
+    if (!file.type.startsWith("image/")) return toast("Pilih foto atau video.", "err");
     let dataUrl;
     try { dataUrl = await compressImage(file, 800, 0.6, 220000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
     const err = h("div", { class: "error" });
@@ -819,6 +887,94 @@ function chatView(S, user) {
         await addDoc(collection(db, "messages"), base("image", cap.value.trim(), dataUrl, rt));
         close();
       } catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
+    };
+  }
+
+  // Video dari galeri: diputar di latar lalu direkam ulang dalam ukuran kecil (maks. 20 detik pertama, 320 px).
+  async function previewVideo(file) {
+    const MAX = 20;
+    const err = h("div", { class: "error" });
+    const prog = h("p", { class: "muted" }, "Menyiapkan video…");
+    const box = h("div", { class: "stack" }, h("div", { class: "spinner", style: "margin:auto" }), prog,
+      h("p", { class: "muted small" }, `Video dikecilkan agar muat tanpa Storage: diambil ${MAX} detik pertama, resolusi rendah. Prosesnya berjalan seiring durasi, jangan tutup halaman.`), err);
+    let cancelled = false; let close = () => {}; close = openSheet("Memproses video", box);
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video"); v.src = url; v.playsInline = true; v.preload = "auto";
+    let ctx, rec, timer;
+    const cleanup = () => { clearInterval(timer); try { ctx?.close(); } catch {} v.pause(); };
+    const watch = setInterval(() => { if (!box.isConnected) { cancelled = true; clearInterval(watch); cleanup(); try { rec?.state === "recording" && rec.stop(); } catch {} } }, 500);
+    try {
+      await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error("Video tidak dapat dibaca di browser ini.")); });
+      const dur = Math.min(isFinite(v.duration) ? v.duration : MAX, MAX);
+      const sc = Math.min(1, 320 / Math.max(v.videoWidth, v.videoHeight));
+      const c = document.createElement("canvas"); c.width = Math.max(2, Math.round(v.videoWidth * sc / 2) * 2); c.height = Math.max(2, Math.round(v.videoHeight * sc / 2) * 2);
+      const g = c.getContext("2d");
+      const out = c.captureStream(15);
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume();
+        const dest = ctx.createMediaStreamDestination(); ctx.createMediaElementSource(v).connect(dest);
+        dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
+      } catch {}
+      const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
+      rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: 130000, audioBitsPerSecond: 24000 });
+      const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise((res) => (rec.onstop = res));
+      rec.start(); await v.play();
+      timer = setInterval(() => {
+        g.drawImage(v, 0, 0, c.width, c.height);
+        prog.textContent = `Memproses… ${Math.min(100, Math.round((v.currentTime / dur) * 100))}%`;
+        if (v.currentTime >= dur || v.ended) { clearInterval(timer); rec.stop(); }
+      }, 66);
+      await done; cleanup(); clearInterval(watch); URL.revokeObjectURL(url);
+      if (cancelled) return;
+      const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+      if (blob.size > 520000) throw new Error("Video masih terlalu besar. Pilih video yang lebih pendek.");
+      const dataUrl = await blobToDataURL(blob);
+      const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
+      const send = h("button", { class: "btn primary" }, "Kirim");
+      box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), cap, err, send);
+      send.onclick = async () => {
+        send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
+        try { const rt = replyTo; setReply(null); await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, dataUrl)); close(); }
+        catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
+      };
+    } catch (e) { cleanup(); clearInterval(watch); box.replaceChildren(h("p", { class: "error" }, e.message || "Gagal memproses video.")); }
+  }
+
+  async function recordVideo() {
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return toast("Browser tidak mendukung rekam video. Gunakan Chrome.", "err");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: true }); }
+    catch { return toast("Izin kamera/mikrofon ditolak.", "err"); }
+    const MAX = 8;
+    const stopStream = () => stream.getTracks().forEach((t) => t.stop());
+    const live = h("video", { autoplay: true, playsinline: true, style: "width:100%;border-radius:12px;background:#000" }); live.muted = true; live.srcObject = stream;
+    const err = h("div", { class: "error" });
+    const btn = h("button", { class: "btn danger" }, "⏺ Mulai rekam");
+    const box = h("div", { class: "stack" }, live, h("p", { class: "muted small" }, `Klip singkat maks. ${MAX} detik (tanpa Storage, ukuran harus kecil).`), btn, err);
+    let close = () => {}; close = openSheet("Rekam video", box);
+    const watch = setInterval(() => { if (!box.isConnected) { clearInterval(watch); stopStream(); } }, 500);
+    btn.onclick = () => {
+      const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 120000, audioBitsPerSecond: 24000 });
+      const chunks = []; let left = MAX;
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const tick = setInterval(() => { left--; btn.textContent = `⏹ Selesai (${left} dtk)`; if (left <= 0) rec.stop(); }, 1000);
+      rec.onstop = async () => {
+        clearInterval(tick); stopStream();
+        const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+        if (blob.size > 520000) { err.textContent = "Video terlalu besar, rekam lebih singkat."; btn.disabled = true; return; }
+        const dataUrl = await blobToDataURL(blob);
+        const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
+        const send = h("button", { class: "btn primary" }, "Kirim");
+        box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), cap, err, send);
+        send.onclick = async () => {
+          send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
+          try { const rt = replyTo; setReply(null); await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, dataUrl)); close(); }
+          catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
+        };
+      };
+      rec.start(); btn.textContent = `⏹ Selesai (${left} dtk)`; btn.onclick = () => rec.stop();
     };
   }
 
@@ -837,7 +993,8 @@ function chatView(S, user) {
     const me = m.senderUid === uid;
     const b = h("div", { class: "bubble" });
     if (m.replyTo) b.append(h("div", { class: "quote" }, h("b", {}, m.replyTo.name), ": ", String(m.replyTo.text || "").slice(0, 80)));
-    if (m.imageData) b.append(h("img", { src: m.imageData, loading: "lazy", alt: "Foto" }));
+    if (m.imageData) b.append(h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: () => viewImage(m) }));
+    if (m.videoData) b.append(h("video", { src: m.videoData, controls: true, preload: "metadata", playsinline: true }));
     if (m.text) b.append(h("div", {}, m.text));
     b.append(h("div", { class: "meta" }, fmtTime(m.createdAt) || "…", " ", me ? ticks(m, m._pending) : ""));
     const counts = {};
@@ -854,7 +1011,7 @@ function chatView(S, user) {
     close = openSheet("Pesan", h("div", { class: "stack" },
       h("div", { class: "row wrap" }, REACTS.map((e) => h("button", { class: "icon-btn", onclick: () => { close(); react(m, e); } }, e))),
       row("↩ Balas", () => setReply(m)),
-      m.senderUid !== uid ? row("🚩 Laporkan pesan", () => report(m), "danger") : row("🗑 Hapus pesan saya", async () => { try { await deleteDoc(doc(db, "messages", m.id)); } catch (e) { toast(friendlyError(e), "err"); } }, "danger")));
+      m.senderUid === uid ? row("🗑 Hapus pesan saya", async () => { try { await deleteDoc(doc(db, "messages", m.id)); } catch (e) { toast(friendlyError(e), "err"); } }, "danger") : null));
   }
   async function react(m, e) {
     const mine = m.reactions?.[uid];
@@ -875,21 +1032,66 @@ function chatView(S, user) {
     };
   }
 
+  function avatarEl(id, big) {
+    const p = profiles[id]?.photoURL; const st = big ? "width:84px;height:84px;font-size:2rem;margin:auto" : null;
+    return p ? h("img", { class: "avatar", src: p, alt: "", style: st }) : h("div", { class: "avatar", style: st }, initial(id));
+  }
   function memberRow(m, onClick) {
     const on = !!online[m.uid];
     return h("div", { class: "list-item", onclick: onClick },
-      h("div", { class: "avatar" }, initial(m.uid), h("span", { class: "dot" + (on ? " on" : "") })),
+      h("div", { style: "position:relative;flex:none" }, avatarEl(m.uid),
+        h("span", { style: "position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);background:" + (on ? "#16a34a" : "#9ca3af") })),
       h("div", { class: "grow" }, h("b", {}, nameOf(m.uid) + (m.uid === uid ? " (kamu)" : "")), h("div", { class: "muted small" }, (m.role === "admin" ? "Admin · " : "") + (on ? "online" : "offline"))));
   }
-  function openMembers() { openSheet("Anggota (" + members.length + ")", h("div", {}, members.map((m) => memberRow(m, () => openProfile(m.uid))))); }
+  function openMembers() { openSheet("Anggota (" + members.length + ")", h("div", {}, h("div", { class: "list-item" }, h("div", { class: "avatar" }, "S"), h("div", { class: "grow" }, h("b", {}, "Sela"), h("div", { class: "muted small" }, "Admin · 083899891468")), h("span", { class: "badge" }, "Admin")), members.map((m) => memberRow(m, () => openProfile(m.uid))))); }
   function openProfile(id) {
     const m = members.find((x) => x.uid === id); const on = !!online[id];
-    openSheet("Profil", h("div", { class: "stack", style: "text-align:center" },
-      h("div", { class: "avatar", style: "width:80px;height:80px;font-size:2rem;margin:auto" }, initial(id)),
+    const err = h("div", { class: "error" });
+    let closeSheet = () => {};
+    let own = null;
+    if (id === uid) {
+      const fi = h("input", { type: "file", accept: "image/*", class: "hidden" });
+      fi.onchange = async () => {
+        const f = fi.files[0]; fi.value = ""; if (!f) return; err.textContent = "";
+        try {
+          const du = await compressImage(f, 192, 0.7, 50000);
+          await updateDoc(doc(db, "profiles", uid), { photoURL: du, updatedAt: serverTimestamp() });
+          toast("Foto profil diperbarui", "good"); closeSheet();
+        } catch (e) { err.textContent = e.message || friendlyError(e); }
+      };
+      own = [fi, h("button", { class: "btn ghost", onclick: () => fi.click() }, "📷 Ganti foto profil")];
+    }
+    closeSheet = openSheet("Profil", h("div", { class: "stack", style: "text-align:center" },
+      avatarEl(id, true),
       h("h2", {}, nameOf(id)), h("p", { class: "muted" }, (on ? "🟢 online" : "⚪ offline") + (m ? " · bergabung " + fmtDateTime(m.joinedAt) : "")),
+      own, err,
       id !== uid ? h("div", { class: "row" },
         h("button", { class: "btn ghost grow", onclick: () => call.startCall(id, false) }, "📞 Suara"),
         h("button", { class: "btn primary grow", onclick: () => call.startCall(id, true) }, "🎥 Video")) : null));
+  }
+  function openGroup() {
+    const big = g.photoURL ? h("img", { class: "avatar", src: g.photoURL, alt: "", style: "width:96px;height:96px;margin:auto" }) : h("div", { class: "avatar", style: "width:96px;height:96px;font-size:2.4rem;margin:auto" }, "S");
+    let close = () => {};
+    close = openSheet("Profil grup", h("div", { class: "stack", style: "text-align:center" },
+      big, h("h2", {}, g.name || "Grup Sela"),
+      g.description ? h("p", { class: "muted" }, g.description) : null,
+      h("p", { class: "muted" }, `${members.length} anggota · ${members.filter((m) => online[m.uid]).length} online`),
+      h("div", { class: "row" },
+        h("button", { class: "btn ghost grow", onclick: () => { close(); openMembers(); } }, "👥 Anggota"),
+        h("button", { class: "btn ghost grow", onclick: () => { close(); openGallery(); } }, "🖼 Galeri")),
+      h("p", { class: "muted small" }, "Admin Sela (083899891468) dapat meninjau foto/video yang dikirim ke grup dan dapat bergabung sebagai pemantau di panggilan; anggota selalu diberi tahu saat itu terjadi."),
+      g.rulesText ? h("details", { style: "text-align:left" }, h("summary", {}, "Aturan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null));
+  }
+  function openGallery() {
+    const imgs = lastDocs.filter((m) => m.imageData || m.videoData).reverse();
+    openSheet("Galeri foto & video", imgs.length
+      ? h("div", {}, h("div", { class: "gallery" }, imgs.map((m) => m.videoData ? h("video", { src: m.videoData, muted: true, preload: "metadata", onclick: () => viewImage(m) }) : h("img", { src: m.imageData, alt: "Foto dari " + nameOf(m.senderUid), loading: "lazy", onclick: () => viewImage(m) }))), h("p", { class: "muted small" }, "Menampilkan foto dari pesan-pesan terbaru."))
+      : h("p", { class: "muted" }, "Belum ada foto."));
+  }
+  function viewImage(m) {
+    openSheet(nameOf(m.senderUid), h("div", { class: "stack" },
+      (m.videoData ? h("video", { src: m.videoData, controls: true, playsinline: true, style: "width:100%;border-radius:12px" }) : h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px" })),
+      m.text ? h("p", {}, m.text) : null, h("div", { class: "muted small" }, fmtDateTime(m.createdAt))));
   }
   function pickPeer(video) {
     const others = members.filter((m) => m.uid !== uid);
