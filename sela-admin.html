@@ -320,6 +320,11 @@ async function compressImage(file, maxDim = 800, q = 0.6, maxChars = 220000) {
   throw new Error("Foto terlalu besar setelah dikompres.");
 }
 
+/* Cermin: pratinjau kamera depan dicerminkan seperti cermin (hasil yang dikirim/dilihat orang lain tetap normal). */
+const mirrorOn = () => { try { return localStorage.getItem("sela-mirror") !== "off"; } catch { return true; } };
+function setMirror(on) { try { localStorage.setItem("sela-mirror", on ? "on" : "off"); } catch {} }
+function applyMirror(v, facing) { if (v) v.style.transform = facing === "user" && mirrorOn() ? "scaleX(-1)" : ""; }
+
 /* ---- room.js ---- */
 
 
@@ -479,7 +484,7 @@ class RoomManager {
     const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner), ctrls);
     this.root.append(el);
     this.ui = { el, grid, count, banner, ctrls };
-    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local;
+    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local; applyMirror(this.me.video, this.facing);
     const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
     const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
     const flip = h("button", { class: "cbtn", "aria-label": "Balik kamera" }, "🔄");
@@ -489,9 +494,11 @@ class RoomManager {
     paintCam();
     mic.onclick = () => { const t = this.local.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
     cam.onclick = () => { const t = vt(); if (!t) return toast("Kamu masuk tanpa kamera.", "err"); t.enabled = !t.enabled; paintCam(); };
+    const mir = h("button", { class: "cbtn", "aria-label": "Cermin" }, "🪞");
+    mir.onclick = () => { setMirror(!mirrorOn()); applyMirror(this.me.video, this.facing); };
     flip.onclick = () => this.flipCamera();
     end.onclick = () => this.leave(false);
-    ctrls.replaceChildren(mic, cam, flip, end);
+    ctrls.replaceChildren(mic, cam, flip, mir, end);
     this.layout(1);
   }
   layout(n) {
@@ -517,7 +524,7 @@ class RoomManager {
       const was = this.local.getVideoTracks()[0]; if (was) nt.enabled = was.enabled;
       this.peers.forEach((p) => { const sn = p.pc.getSenders().find((x) => x.track?.kind === "video"); if (sn) sn.replaceTrack(nt); });
       this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
-      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next;
+      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next; applyMirror(this.me.video, this.facing);
     } catch { toast("Tidak dapat beralih kamera.", "err"); }
   }
 
@@ -692,8 +699,18 @@ function startAdmin(admin) {
       await b.commit(); audit("reject_request", r.id, { reason: reason || null }); toast("Ditolak", "good");
     } catch (e) { fail(e); btn.disabled = false; }
   }
+  async function restoreMember(m) {
+    if (!confirm(`Kembalikan ${nameOf(m.uid)} ke grup?`)) return;
+    try {
+      const b = writeBatch(db);
+      b.update(doc(db, "groupMembers", m.id), { status: "active" });
+      b.update(doc(db, "joinRequests", m.uid), { status: "approved", reviewedAt: serverTimestamp(), reviewedBy: aid, rejectionReason: "", canResubmit: false });
+      b.update(doc(db, "users", m.uid), { approvalStatus: "approved" });
+      await b.commit(); audit("member_restored", m.uid); toast("Anggota dikembalikan", "good");
+    } catch (e) { fail(e); }
+  }
   async function setMemberStatus(m, status, label) {
-    if (!confirm(`${label} ${nameOf(m.uid)}?`)) return;
+    if (!confirm(status === "removed" ? `KELUARKAN ${nameOf(m.uid)} dari grup? Dia langsung kehilangan akses dan tidak bisa mengajukan ulang. (Bisa dikembalikan lewat tab Anggota.)` : `${label} ${nameOf(m.uid)}?`)) return;
     try {
       const b = writeBatch(db);
       b.update(doc(db, "groupMembers", m.id), { status });
@@ -756,6 +773,7 @@ function startAdmin(admin) {
         h("button", { class: "btn ghost small", onclick: () => profile(m.uid) }, "Profil"),
         m.status === "active" ? h("button", { class: "btn ghost small", onclick: () => setMemberStatus(m, "restricted", "Batasi") }, "Batasi") : null,
         m.status === "restricted" ? h("button", { class: "btn ok small", onclick: () => setMemberStatus(m, "active", "Pulihkan") }, "Pulihkan") : null,
+        m.status === "removed" ? h("button", { class: "btn ok small", onclick: () => restoreMember(m) }, "Kembalikan ke grup") : null,
         m.status !== "removed" ? h("button", { class: "btn danger small", onclick: () => setMemberStatus(m, "removed", "Keluarkan") }, "Keluarkan") : null)))];
   }
   function profile(uid) {
