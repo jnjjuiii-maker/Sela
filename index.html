@@ -95,11 +95,20 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .obs-tile video{width:100%;background:#000;border-radius:12px;max-height:45vh}
 .gallery video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}
 .bubble video{max-width:100%;border-radius:12px;max-height:320px}
+.call.room .room-grid{position:absolute;inset:0;padding:78px 6px 104px;display:grid;gap:6px;grid-template-columns:repeat(var(--cols,1),1fr);grid-template-rows:repeat(var(--rows,1),1fr);z-index:1}
+.rtile{position:relative;background:#1c1530;border-radius:12px;overflow:hidden;min-height:0}
+.rtile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:transparent}
+.rtile .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:2.4rem;font-weight:800;color:#8b5cf6}
+.rtile .nm{position:absolute;left:6px;bottom:6px;background:#000a;padding:2px 8px;border-radius:8px;font-size:.78rem;z-index:2}
+.call.room .room-grid.duo,.call.room .room-grid.solo{display:block;padding:0}
+.call.room .room-grid.duo .rtile.other,.call.room .room-grid.solo .rtile.me{position:absolute;inset:0;border-radius:0}
+.call.room .room-grid.duo .rtile.me{position:absolute;right:12px;top:100px;width:100px;height:140px;z-index:3;border:2px solid #fff}
+.rooms-list .list-item b{display:block}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, getDocFromServer, deleteDoc, setDoc, deleteField, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setDoc, runTransaction, deleteField, getDocFromServer, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref as dRef, onValue, set as dSet, onDisconnect, serverTimestamp as dTs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 /* ---- firebase-config.js ---- */
 // ISI dengan konfigurasi proyek Firebase Anda (Firebase Console > Project settings > Your apps > Web app).
@@ -558,7 +567,265 @@ class CallManager {
 // updateDoc yang mengembalikan error jelas jika gagal
 async function updateDocSafe(ref, data) { await updateDoc(ref, data); }
 
+/* ---- room.js ---- */
+
+
+/*
+ * Room panggilan grup (mesh WebRTC). 10 room, tiap room maksimal 10 peserta.
+ *   rooms/{r1..r10}.members = { uid: { sid, video, ts } }   (ts diperbarui tiap 20 dtk sebagai penanda masih aktif)
+ *   rooms/{rid}/sig/{pid} + /cand          signaling antar peserta (pid = penawar.sid.penjawab.sid)
+ *   rooms/{rid}/observers/{adminUid}        admin bergabung sebagai pemantau (SELALU diumumkan ke peserta)
+ *   rooms/{rid}/obsPeers/{uid_sid} + /cand  signaling admin <-> peserta
+ * Mesh berarti tiap peserta mengirim ke semua peserta lain: pada 6+ orang matikan kamera agar lancar.
+ */
+const ROOM_COUNT = 10;
+const ROOM_CAP = 10;
+const ROOM_FRESH_MS = 75000;
+const roomIds = Array.from({ length: ROOM_COUNT }, (_, i) => "r" + (i + 1));
+function freshMembers(data, now = Date.now()) {
+  return Object.entries(data?.members || {})
+    .filter(([, v]) => (v?.ts?.toMillis ? now - v.ts.toMillis() < ROOM_FRESH_MS : true))
+    .map(([uid, v]) => ({ uid, ...v }));
+}
+
+class RoomManager {
+  constructor({ db, uid, nameOf, root }) {
+    Object.assign(this, { db, uid, nameOf, root });
+    this.rid = null; this.sid = null; this.local = null; this.ui = null; this.peers = new Map(); this.unsubs = [];
+    this.obsPeers = {}; this.hb = null; this.seenSelf = false; this.facing = "user"; this.left = true;
+    window.addEventListener("pagehide", () => { if (this.rid) this.leave(true); });
+  }
+
+  async join(rid, wantVideo = true) {
+    if (this.rid) return toast("Kamu sedang berada di sebuah room.", "err");
+    if (!navigator.mediaDevices?.getUserMedia) return toast("Browser tidak mendukung panggilan. Buka lewat https di Chrome.", "err");
+    const ref = doc(this.db, "rooms", rid);
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: wantVideo ? { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } } : false,
+      });
+    } catch { return toast("Izin kamera/mikrofon ditolak. Aktifkan di pengaturan situs.", "err"); }
+    const sid = Math.random().toString(36).slice(2, 10);
+    let others = 0;
+    try {
+      await runTransaction(this.db, async (tx) => {
+        const s = await tx.get(ref);
+        const fresh = freshMembers(s.exists() ? s.data() : {}).filter((m) => m.uid !== this.uid);
+        others = fresh.length;
+        if (fresh.length >= ROOM_CAP) { const e = new Error("full"); e.full = true; throw e; }
+        tx.set(ref, { members: { [this.uid]: { sid, video: !!wantVideo, ts: serverTimestamp() } } }, { merge: true });
+      });
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      return toast(e.full ? "Room ini sudah penuh (10/10). Silakan pindah ke Room lain." :
+        e.code === "permission-denied" ? "Room penuh atau berisi sesi lama. Pindah ke Room lain, atau minta admin mengosongkan room ini." :
+        "Gagal masuk room: " + friendlyError(e), "err");
+    }
+    this.rid = rid; this.sid = sid; this.local = stream; this.left = false; this.seenSelf = false;
+    // Banyak peserta: kamera dimatikan otomatis agar lancar (bisa dinyalakan lagi).
+    if (others >= 5) stream.getVideoTracks().forEach((t) => (t.enabled = false));
+    this.buildUI(rid);
+    this.hb = setInterval(() => updateDoc(ref, { ["members." + this.uid + ".ts"]: serverTimestamp() }).catch(() => {}), 20000);
+    this.unsubs.push(onSnapshot(ref, (snap) => {
+      const data = snap.data() || {};
+      const me = data.members?.[this.uid];
+      if (me && me.sid === this.sid) this.seenSelf = true;
+      else if (this.seenSelf) { toast("Kamu dikeluarkan dari room oleh admin.", "err"); this.leave(false); return; }
+      this.sync(freshMembers(data));
+    }, () => {}));
+    this.watchObservers();
+  }
+
+  /* ---------- peserta lain ---------- */
+  sync(members) {
+    if (!this.rid) return;
+    const others = members.filter((m) => m.uid !== this.uid);
+    for (const [uid, p] of [...this.peers]) {
+      const m = others.find((x) => x.uid === uid);
+      if (!m || m.sid !== p.sid) this.drop(uid);
+    }
+    others.forEach((m) => { if (!this.peers.has(m.uid)) this.connect(m); });
+    this.layout(members.length);
+  }
+
+  connect(m) {
+    const offerer = this.uid < m.uid;
+    const pid = (offerer ? [this.uid, this.sid, m.uid, m.sid] : [m.uid, m.sid, this.uid, this.sid]).join(".");
+    const pref = doc(this.db, "rooms", this.rid, "sig", pid), cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const p = { pc, sid: m.sid, unsubs: [], tile: this.makeTile(m.uid) };
+    this.peers.set(m.uid, p);
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.ontrack = (e) => { p.tile.video.srcObject = e.streams[0]; };
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: offerer ? "o" : "a", ...e.candidate.toJSON() }).catch(() => {}); };
+    pc.onconnectionstatechange = () => {
+      p.tile.state.textContent = pc.connectionState === "connected" ? "" : pc.connectionState === "failed" ? "terputus" : "menyambung…";
+      if (pc.connectionState === "connected") this.limitBitrate(pc);
+      if (pc.connectionState === "failed") setTimeout(() => { if (this.peers.get(m.uid) === p) { this.drop(m.uid); this.layout(this.peers.size + 1); this.refreshRoster(); } }, 2000);
+    };
+    const pending = []; const want = offerer ? "a" : "o";
+    const flush = () => pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+    p.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== want) return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+    if (offerer) {
+      (async () => {
+        try {
+          const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+          await setDoc(pref, { offer: { type: offer.type, sdp: offer.sdp }, answer: null });
+        } catch {}
+      })();
+      p.unsubs.push(onSnapshot(pref, (s) => {
+        const d = s.data();
+        if (d?.answer && !pc.currentRemoteDescription) pc.setRemoteDescription(new RTCSessionDescription(d.answer)).then(flush).catch(() => {});
+      }, () => {}));
+    } else {
+      let handled = null;
+      p.unsubs.push(onSnapshot(pref, async (s) => {
+        const d = s.data();
+        if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+        handled = d.offer.sdp;
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(d.offer)); flush();
+          const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+          await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+        } catch {}
+      }, () => {}));
+    }
+  }
+  refreshRoster() { /* memicu sinkronisasi ulang lewat heartbeat sendiri */ if (this.rid) updateDoc(doc(this.db, "rooms", this.rid), { ["members." + this.uid + ".ts"]: serverTimestamp() }).catch(() => {}); }
+  limitBitrate(pc) {
+    try { pc.getSenders().forEach((s) => { if (s.track?.kind !== "video") return; const prm = s.getParameters(); prm.encodings = prm.encodings?.length ? prm.encodings : [{}]; prm.encodings[0].maxBitrate = 130000; s.setParameters(prm).catch(() => {}); }); } catch {}
+  }
+  drop(uid) {
+    const p = this.peers.get(uid); if (!p) return;
+    p.unsubs.forEach((f) => { try { f(); } catch {} }); try { p.pc.close(); } catch {}
+    p.tile.el.remove(); this.peers.delete(uid);
+  }
+
+  /* ---------- UI ---------- */
+  makeTile(uid, me = false) {
+    const video = h("video", { autoplay: true, playsinline: true }); if (me) video.muted = true;
+    const state = h("span", { class: "muted small" });
+    const nm = me ? "Kamu" : this.nameOf(uid);
+    const el = h("div", { class: "rtile " + (me ? "me" : "other") }, h("div", { class: "ph" }, (nm[0] || "?").toUpperCase()), video, h("div", { class: "nm" }, nm, " ", state));
+    this.ui?.grid.append(el);
+    return { el, video, state };
+  }
+  buildUI(rid) {
+    this.closeUI();
+    const grid = h("div", { class: "room-grid" });
+    const title = h("b", {}, "Room " + rid.slice(1));
+    const count = h("div", {}, "");
+    const banner = h("div", { class: "banner hidden" });
+    const ctrls = h("div", { class: "ctrls" });
+    const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner), ctrls);
+    this.root.append(el);
+    this.ui = { el, grid, count, banner, ctrls };
+    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local;
+    const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
+    const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
+    const flip = h("button", { class: "cbtn", "aria-label": "Balik kamera" }, "🔄");
+    const end = h("button", { class: "cbtn end", "aria-label": "Keluar room" }, "📵");
+    const vt = () => this.local.getVideoTracks()[0];
+    const paintCam = () => cam.classList.toggle("off", !!vt() && !vt().enabled);
+    paintCam();
+    mic.onclick = () => { const t = this.local.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
+    cam.onclick = () => { const t = vt(); if (!t) return toast("Kamu masuk tanpa kamera.", "err"); t.enabled = !t.enabled; paintCam(); };
+    flip.onclick = () => this.flipCamera();
+    end.onclick = () => this.leave(false);
+    ctrls.replaceChildren(mic, cam, flip, end);
+    this.layout(1);
+  }
+  layout(n) {
+    if (!this.ui) return;
+    const g = this.ui.grid; const others = this.peers.size;
+    g.classList.toggle("duo", others === 1);
+    g.style.setProperty("--cols", String(n <= 4 ? 2 : 3));
+    g.style.setProperty("--rows", String(Math.ceil(n / (n <= 4 ? 2 : 3))));
+    if (others === 0) g.classList.add("solo"); else g.classList.remove("solo");
+    this.ui.count.textContent = `${n}/${ROOM_CAP} peserta` + (n > 5 ? " · matikan kamera agar lancar" : "");
+  }
+  closeUI() { this.ui?.el.remove(); this.ui = null; }
+  setBanner(t, ms) {
+    const b = this.ui?.banner; if (!b) return;
+    b.textContent = t || ""; b.classList.toggle("hidden", !t);
+    if (ms) setTimeout(() => { if (b.textContent === t) { b.textContent = ""; b.classList.add("hidden"); } }, ms);
+  }
+  async flipCamera() {
+    try {
+      const next = this.facing === "user" ? "environment" : "user";
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: next }, width: { ideal: 320 }, height: { ideal: 240 } } });
+      const nt = s.getVideoTracks()[0];
+      const was = this.local.getVideoTracks()[0]; if (was) nt.enabled = was.enabled;
+      this.peers.forEach((p) => { const sn = p.pc.getSenders().find((x) => x.track?.kind === "video"); if (sn) sn.replaceTrack(nt); });
+      this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
+      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next;
+    } catch { toast("Tidak dapat beralih kamera.", "err"); }
+  }
+
+  /* ---------- pemantau admin (selalu diumumkan) ---------- */
+  watchObservers() {
+    const rid = this.rid;
+    this.unsubs.push(onSnapshot(collection(this.db, "rooms", rid, "observers"), (snap) => {
+      snap.docChanges().forEach((c) => {
+        if (c.type === "added") {
+          this.setBanner("👁 Admin Sela bergabung sebagai pemantau room (admin tidak mengirim suara/video).");
+          toast("Admin Sela bergabung sebagai pemantau room ini.");
+          this.serveAdmin(c.doc.id);
+        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setBanner("Admin Sela keluar dari pemantauan.", 5000); }
+      });
+    }, () => {}));
+  }
+  serveAdmin(aid) {
+    this.closeAdmin(aid);
+    const pref = doc(this.db, "rooms", this.rid, "obsPeers", this.uid + "_" + this.sid), cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const rec = { pc, unsubs: [] }; this.obsPeers[aid] = rec;
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: "member", ...e.candidate.toJSON() }).catch(() => {}); };
+    const pending = []; let handled = null;
+    rec.unsubs.push(onSnapshot(pref, async (s) => {
+      const d = s.data();
+      if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+      handled = d.offer.sdp;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+        pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+        await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+      } catch {}
+    }, () => {}));
+    rec.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== "admin") return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+  }
+  closeAdmin(aid) {
+    const r = this.obsPeers[aid]; if (!r) return;
+    r.unsubs.forEach((f) => { try { f(); } catch {} }); try { r.pc.close(); } catch {}
+    delete this.obsPeers[aid];
+  }
+
+  async leave(quiet) {
+    if (this.left) return; this.left = true;
+    const rid = this.rid, ref = rid && doc(this.db, "rooms", rid);
+    clearInterval(this.hb); this.unsubs.forEach((f) => { try { f(); } catch {} }); this.unsubs = [];
+    [...this.peers.keys()].forEach((u) => this.drop(u));
+    Object.keys(this.obsPeers).forEach((k) => this.closeAdmin(k));
+    this.local?.getTracks().forEach((t) => t.stop()); this.local = null;
+    this.rid = null; this.closeUI();
+    if (ref) await updateDoc(ref, { ["members." + this.uid]: deleteField() }).catch(() => {});
+  }
+}
+
 /* ---- app.js ---- */
+
 
 
 
@@ -809,6 +1076,8 @@ function chatView(S, user) {
 
   const call = new CallManager({ db, uid, groupId: GROUP_ID, nameOf, root: document.body });
   unsubs.push(call.listenIncoming());
+  const rooms = new RoomManager({ db, uid, nameOf, root: document.body });
+  unsubs.push(() => rooms.leave(true));
 
   // Kehadiran (online/offline) lewat Realtime Database
   const sref = dRef(rtdb, `status/${uid}`);
@@ -833,6 +1102,7 @@ function chatView(S, user) {
     h("button", { class: "icon-btn", "aria-label": "Galeri", onclick: openGallery }, "🖼"),
     h("button", { class: "icon-btn", "aria-label": "Panggilan suara", onclick: () => pickPeer(false) }, "📞"),
     h("button", { class: "icon-btn", "aria-label": "Video call", onclick: () => pickPeer(true) }, "🎥"),
+    h("button", { class: "icon-btn", "aria-label": "Room panggilan grup", onclick: openRooms }, "🚪"),
     h("button", { class: "icon-btn", "aria-label": "Tema", onclick: toggleTheme }, "🌓"),
     h("button", { class: "icon-btn", "aria-label": "Keluar", onclick: () => signOutNow() }, "⎋"));
 
@@ -1048,19 +1318,7 @@ function chatView(S, user) {
     const m = members.find((x) => x.uid === id); const on = !!online[id];
     const err = h("div", { class: "error" });
     let closeSheet = () => {};
-    let own = null;
-    if (id === uid) {
-      const fi = h("input", { type: "file", accept: "image/*", class: "hidden" });
-      fi.onchange = async () => {
-        const f = fi.files[0]; fi.value = ""; if (!f) return; err.textContent = "";
-        try {
-          const du = await compressImage(f, 192, 0.7, 50000);
-          await updateDoc(doc(db, "profiles", uid), { photoURL: du, updatedAt: serverTimestamp() });
-          toast("Foto profil diperbarui", "good"); closeSheet();
-        } catch (e) { err.textContent = e.message || friendlyError(e); }
-      };
-      own = [fi, h("button", { class: "btn ghost", onclick: () => fi.click() }, "📷 Ganti foto profil")];
-    }
+    const own = id === uid ? h("p", { class: "muted small" }, "Nama dan foto profil hanya dapat diubah oleh admin.") : null;
     closeSheet = openSheet("Profil", h("div", { class: "stack", style: "text-align:center" },
       avatarEl(id, true),
       h("h2", {}, nameOf(id)), h("p", { class: "muted" }, (on ? "🟢 online" : "⚪ offline") + (m ? " · bergabung " + fmtDateTime(m.joinedAt) : "")),
@@ -1092,6 +1350,26 @@ function chatView(S, user) {
     openSheet(nameOf(m.senderUid), h("div", { class: "stack" },
       (m.videoData ? h("video", { src: m.videoData, controls: true, playsinline: true, style: "width:100%;border-radius:12px" }) : h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px" })),
       m.text ? h("p", {}, m.text) : null, h("div", { class: "muted small" }, fmtDateTime(m.createdAt))));
+  }
+  function openRooms() {
+    if (call.callId) return toast("Akhiri panggilan yang sedang berjalan dulu.", "err");
+    let data = {}; let close = () => {};
+    const cam = h("input", { type: "checkbox", checked: true });
+    const listEl = h("div", { class: "rooms-list" });
+    const paint = () => listEl.replaceChildren(...roomIds.map((id) => {
+      const f = freshMembers(data[id]); const full = f.length >= ROOM_CAP;
+      return h("div", { class: "list-item" },
+        h("div", { class: "grow" }, h("b", {}, "Room " + id.slice(1)),
+          h("div", { class: full ? "error small" : "muted small" }, full ? "Room ini sudah penuh (10/10). Silakan pindah ke Room lain." : `${f.length}/10 · ` + (f.length ? f.slice(0, 3).map((m) => nameOf(m.uid)).join(", ") + (f.length > 3 ? "…" : "") : "kosong"))),
+        h("button", { class: "btn " + (full ? "ghost" : "primary") + " small", disabled: full, onclick: () => { close(); rooms.join(id, cam.checked); } }, full ? "Penuh" : "Masuk"));
+    }));
+    const un = onSnapshot(collection(db, "rooms"), (sn) => { data = {}; sn.forEach((d) => (data[d.id] = d.data())); paint(); }, () => {});
+    close = openSheet("Room panggilan (1–10)", h("div", { class: "stack" },
+      h("label", { class: "checkrow" }, cam, "Masuk dengan kamera"),
+      h("p", { class: "muted small" }, "Satu room maksimal 10 orang. Kamu bisa masuk sendiri tanpa menunggu anggota lain. Jika banyak peserta, matikan kamera agar lancar."),
+      listEl));
+    paint();
+    const w = setInterval(() => { if (!listEl.isConnected) { clearInterval(w); un(); } }, 1000);
   }
   function pickPeer(video) {
     const others = members.filter((m) => m.uid !== uid);
