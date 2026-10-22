@@ -107,7 +107,7 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setDoc, runTransaction, deleteField, getDocFromServer, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref as dRef, onValue, set as dSet, onDisconnect, serverTimestamp as dTs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 /* ---- firebase-config.js ---- */
@@ -143,7 +143,9 @@ const configured = !JSON.stringify(firebaseConfig).includes("ISI_");
 let app, auth, db, rtdb;
 if (configured) {
   app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
+  // Login disimpan permanen di perangkat (tetap masuk setelah aplikasi ditutup) sampai pengguna menekan Keluar.
+  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] });
+  try { navigator.storage?.persist?.(); } catch {}
   auth.languageCode = "id";
   db = getFirestore(app);
   rtdb = getDatabase(app);
@@ -318,6 +320,11 @@ async function compressImage(file, maxDim = 800, q = 0.6, maxChars = 220000) {
   throw new Error("Foto terlalu besar setelah dikompres.");
 }
 
+/* Cermin: pratinjau kamera depan dicerminkan seperti cermin (hasil yang dikirim/dilihat orang lain tetap normal). */
+const mirrorOn = () => { try { return localStorage.getItem("sela-mirror") !== "off"; } catch { return true; } };
+function setMirror(on) { try { localStorage.setItem("sela-mirror", on ? "on" : "off"); } catch {} }
+function applyMirror(v, facing) { if (v) v.style.transform = facing === "user" && mirrorOn() ? "scaleX(-1)" : ""; }
+
 /* ---- call.js ---- */
 
 
@@ -366,6 +373,7 @@ class CallManager {
     this.ui = { el, remote, local, status, ctrls, banner };
     return this.ui;
   }
+  paintMirror() { if (this.ui?.local) applyMirror(this.ui.local, this.facing); }
   closeUI() { this.ui?.el.remove(); this.ui = null; }
   setBanner(t, ms) {
     const b = this.ui?.banner; if (!b) return;
@@ -382,9 +390,11 @@ class CallManager {
     const end = h("button", { class: "cbtn end", "aria-label": "Akhiri" }, "📵");
     mic.onclick = () => { const t = this.local?.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
     cam.onclick = () => { const t = this.local?.getVideoTracks()[0]; if (!t) return; t.enabled = !t.enabled; cam.classList.toggle("off", !t.enabled); };
+    const mir = h("button", { class: "cbtn", "aria-label": "Cermin" }, "🪞");
+    mir.onclick = () => { setMirror(!mirrorOn()); this.paintMirror(); };
     flip.onclick = () => this.flipCamera();
     end.onclick = () => this.hangup();
-    ctrls.replaceChildren(mic, ...(withVideo ? [cam, flip] : []), end);
+    ctrls.replaceChildren(mic, ...(withVideo ? [cam, flip, mir] : []), end);
   }
 
   async flipCamera() {
@@ -396,7 +406,7 @@ class CallManager {
       const sender = this.pc.getSenders().find((x) => x.track?.kind === "video");
       if (sender) await sender.replaceTrack(nt);
       this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
-      this.local.addTrack(nt); this.ui.local.srcObject = this.local; this.facing = next;
+      this.local.addTrack(nt); this.ui.local.srcObject = this.local; this.facing = next; this.paintMirror();
     } catch { toast("Tidak dapat beralih kamera.", "err"); }
   }
 
@@ -497,7 +507,7 @@ class CallManager {
     const ui = this.buildUI("Memanggil " + this.nameOf(peerUid) + "…", video);
     this.controls(video);
     try {
-      this.local = await this.getMedia(video); ui.local && (ui.local.srcObject = this.local);
+      this.local = await this.getMedia(video); ui.local && (ui.local.srcObject = this.local); this.paintMirror();
       const ref = await addDoc(collection(this.db, "calls"), {
         callerUid: this.uid, receiverUid: peerUid, groupId: this.groupId, status: "ringing", video, createdAt: serverTimestamp(), startedAt: null, endedAt: null, answer: null, offer: null,
       });
@@ -537,7 +547,7 @@ class CallManager {
       info.remove(); this.ui.remote.classList.remove("hidden");
       if (d.video) { /* tampilkan video lokal */ const l = h("video", { class: "local", autoplay: true, playsinline: true }); l.muted = true; this.ui.el.insertBefore(l, this.ui.ctrls); this.ui.local = l; }
       this.controls(!!d.video); this.setStatus("Menghubungkan…");
-      this.local = await this.getMedia(!!d.video); if (this.ui.local) this.ui.local.srcObject = this.local;
+      this.local = await this.getMedia(!!d.video); if (this.ui.local) this.ui.local.srcObject = this.local; this.paintMirror();
       const pc = this.makePC(callId, "receiver");
       // Offer bisa belum ada saat notifikasi pertama datang, jadi ambil data terbaru.
       let offer = d.offer;
@@ -726,7 +736,7 @@ class RoomManager {
     const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner), ctrls);
     this.root.append(el);
     this.ui = { el, grid, count, banner, ctrls };
-    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local;
+    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local; applyMirror(this.me.video, this.facing);
     const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
     const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
     const flip = h("button", { class: "cbtn", "aria-label": "Balik kamera" }, "🔄");
@@ -736,9 +746,11 @@ class RoomManager {
     paintCam();
     mic.onclick = () => { const t = this.local.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
     cam.onclick = () => { const t = vt(); if (!t) return toast("Kamu masuk tanpa kamera.", "err"); t.enabled = !t.enabled; paintCam(); };
+    const mir = h("button", { class: "cbtn", "aria-label": "Cermin" }, "🪞");
+    mir.onclick = () => { setMirror(!mirrorOn()); applyMirror(this.me.video, this.facing); };
     flip.onclick = () => this.flipCamera();
     end.onclick = () => this.leave(false);
-    ctrls.replaceChildren(mic, cam, flip, end);
+    ctrls.replaceChildren(mic, cam, flip, mir, end);
     this.layout(1);
   }
   layout(n) {
@@ -764,7 +776,7 @@ class RoomManager {
       const was = this.local.getVideoTracks()[0]; if (was) nt.enabled = was.enabled;
       this.peers.forEach((p) => { const sn = p.pc.getSenders().find((x) => x.track?.kind === "video"); if (sn) sn.replaceTrack(nt); });
       this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
-      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next;
+      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next; applyMirror(this.me.video, this.facing);
     } catch { toast("Tidak dapat beralih kamera.", "err"); }
   }
 
@@ -896,6 +908,16 @@ function rulesView(S, uid, go) {
   const err = h("div", { class: "error" });
   const name = h("input", { class: "input", maxlength: "40", placeholder: "Nama panggilan", value: S.name });
   const agree = h("input", { type: "checkbox" });
+  let photo = null;
+  const pv = h("div", { class: "avatar", style: "width:84px;height:84px;font-size:2rem;margin:auto" }, "📷");
+  const pf = h("input", { type: "file", accept: "image/*", class: "hidden" });
+  pf.onchange = async () => {
+    const f = pf.files[0]; pf.value = ""; if (!f) return; err.textContent = "";
+    try { photo = await compressImage(f, 192, 0.7, 50000); pv.replaceChildren(h("img", { src: photo, style: "width:100%;height:100%;object-fit:cover" })); }
+    catch (e) { err.textContent = e.message || "Foto tidak dapat diproses."; }
+  };
+  const photoBox = h("div", { class: "stack", style: "text-align:center" }, pv, pf, h("button", { class: "btn ghost small", onclick: () => pf.click() }, "Pasang foto profil"),
+    h("p", { class: "muted small" }, "Foto profil hanya bisa dipasang sekarang. Setelah disetujui, profil tidak bisa diubah oleh anggota."));
   const next = h("button", { class: "btn primary", disabled: true }, "LANJUT KE VERIFIKASI");
   const check = () => { next.disabled = !(agree.checked && name.value.trim().length >= 2); };
   agree.addEventListener("change", check); name.addEventListener("input", check);
@@ -925,7 +947,7 @@ function rulesView(S, uid, go) {
     const n = name.value.trim(); err.textContent = ""; next.disabled = true; next.textContent = "Menyimpan…";
     try {
       await updateDoc(doc(db, "users", uid), { displayName: n });
-      await setDoc(doc(db, "profiles", uid), { displayName: n, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(doc(db, "profiles", uid), { displayName: n, ...(photo ? { photoURL: photo } : {}), updatedAt: serverTimestamp() }, { merge: true });
       S.name = n; go("record");
     } catch (e) { err.textContent = friendlyError(e); next.disabled = false; next.textContent = "LANJUT KE VERIFIKASI"; }
   };
@@ -939,7 +961,7 @@ function rulesView(S, uid, go) {
       h("p", { class: "muted" }, "Catatan: rekaman suara hanya digunakan untuk proses peninjauan oleh admin dan tidak dapat memastikan jenis kelamin seseorang secara akurat. Keputusan akhir ada pada admin."),
       audioBox),
     h("div", { class: "card stack" },
-      h("label", {}, "Nama panggilan"), name,
+      photoBox, h("label", {}, "Nama panggilan"), name,
       g.rulesText ? h("details", {}, h("summary", {}, "Baca persyaratan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null,
       g.privacyText ? h("details", {}, h("summary", {}, "Baca kebijakan privasi"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.privacyText)) : null,
       h("label", { class: "checkrow" }, agree, h("span", {}, "Saya menyetujui persyaratan grup dan kebijakan privasi, termasuk bahwa admin akan mendengarkan rekaman suara saya untuk verifikasi.")),
@@ -1054,7 +1076,7 @@ function waitingView(S, uid, go) {
     r.status === "rejected" ? h("p", { class: "error" }, "Alasan: " + (r.rejectionReason || "Tidak ada alasan yang diberikan.")) : null,
     r.status === "rejected" && r.canResubmit ? h("button", { class: "btn primary", onclick: () => go("record") }, "Ajukan Ulang") : null,
     r.status === "rejected" && !r.canResubmit ? h("p", { class: "muted" }, "Admin tidak mengizinkan pengajuan ulang.") : null,
-    check, msg, notif, h("button", { class: "btn ghost small", onclick: () => signOutNow() }, "Keluar")));
+    check, msg, notif));
 }
 
 function restrictedView() {
@@ -1103,8 +1125,7 @@ function chatView(S, user) {
     h("button", { class: "icon-btn", "aria-label": "Panggilan suara", onclick: () => pickPeer(false) }, "📞"),
     h("button", { class: "icon-btn", "aria-label": "Video call", onclick: () => pickPeer(true) }, "🎥"),
     h("button", { class: "icon-btn", "aria-label": "Room panggilan grup", onclick: openRooms }, "🚪"),
-    h("button", { class: "icon-btn", "aria-label": "Tema", onclick: toggleTheme }, "🌓"),
-    h("button", { class: "icon-btn", "aria-label": "Keluar", onclick: () => signOutNow() }, "⎋"));
+    h("button", { class: "icon-btn", "aria-label": "Tema", onclick: toggleTheme }, "🌓"));
 
   const list = h("div", { class: "msgs" });
   const replyBar = h("div", { class: "replybar hidden" });
@@ -1218,7 +1239,7 @@ function chatView(S, user) {
     catch { return toast("Izin kamera/mikrofon ditolak.", "err"); }
     const MAX = 8;
     const stopStream = () => stream.getTracks().forEach((t) => t.stop());
-    const live = h("video", { autoplay: true, playsinline: true, style: "width:100%;border-radius:12px;background:#000" }); live.muted = true; live.srcObject = stream;
+    const live = h("video", { autoplay: true, playsinline: true, style: "width:100%;border-radius:12px;background:#000" }); live.muted = true; live.srcObject = stream; live.style.transform = "scaleX(-1)";
     const err = h("div", { class: "error" });
     const btn = h("button", { class: "btn danger" }, "⏺ Mulai rekam");
     const box = h("div", { class: "stack" }, live, h("p", { class: "muted small" }, `Klip singkat maks. ${MAX} detik (tanpa Storage, ukuran harus kecil).`), btn, err);
@@ -1245,6 +1266,42 @@ function chatView(S, user) {
         };
       };
       rec.start(); btn.textContent = `⏹ Selesai (${left} dtk)`; btn.onclick = () => rec.stop();
+    };
+  }
+
+  /* Izin kamera, mikrofon, notifikasi: browser hanya mengizinkan lewat ketukan pengguna, jadi ditampilkan satu tombol. */
+  async function permState() {
+    const r = { cam: "prompt", mic: "prompt", notif: "Notification" in window ? Notification.permission : "unsupported" };
+    try { r.cam = (await navigator.permissions.query({ name: "camera" })).state; } catch {}
+    try { r.mic = (await navigator.permissions.query({ name: "microphone" })).state; } catch {}
+    return r;
+  }
+  async function askPermissions() {
+    const st = await permState();
+    const missing = st.cam !== "granted" || st.mic !== "granted" || (st.notif !== "granted" && st.notif !== "unsupported");
+    if (!missing) return;
+    try { if (sessionStorage.getItem("sela-perm-asked")) return; sessionStorage.setItem("sela-perm-asked", "1"); } catch {}
+    const lines = h("div", { class: "stack" });
+    const paint = async () => {
+      const x = await permState();
+      const t = (v) => (v === "granted" ? "✅ aktif" : v === "denied" ? "⛔ diblokir" : "⚪ belum diizinkan");
+      lines.replaceChildren(h("div", {}, "📷 Kamera: ", t(x.cam)), h("div", {}, "🎤 Mikrofon: ", t(x.mic)), h("div", {}, "🔔 Notifikasi: ", x.notif === "unsupported" ? "tidak didukung browser ini" : t(x.notif === "default" ? "prompt" : x.notif)));
+      if (x.cam === "denied" || x.mic === "denied" || x.notif === "denied") lines.append(h("p", { class: "error small" }, "Yang diblokir harus diaktifkan manual: ketuk ikon gembok/pengaturan di samping alamat situs → Izin → pilih Izinkan, lalu muat ulang halaman."));
+      return x;
+    };
+    const btn = h("button", { class: "btn primary" }, "Izinkan semua");
+    let close = () => {};
+    close = openSheet("Aktifkan izin", h("div", { class: "stack" },
+      h("p", { class: "muted" }, "Agar panggilan suara/video, rekam video, dan notifikasi pesan berfungsi, izinkan akses berikut. Kamera dan mikrofon hanya aktif saat kamu memulai panggilan atau merekam, dan tidak pernah aktif diam-diam."),
+      lines, btn));
+    paint();
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); } catch {}
+      try { const s2 = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); s2.getTracks().forEach((t) => t.stop()); }
+      catch { try { const s3 = await navigator.mediaDevices.getUserMedia({ audio: true }); s3.getTracks().forEach((t) => t.stop()); } catch {} }
+      const x = await paint(); btn.disabled = false;
+      if (x.cam === "granted" && x.mic === "granted" && x.notif !== "default") { toast("Izin sudah aktif", "good"); close(); }
     };
   }
 
@@ -1398,7 +1455,7 @@ function chatView(S, user) {
     if (!document.hidden) lastDocs.forEach((m) => { if (m.senderUid !== uid && !m._pending && !(m.readBy || {})[uid]) updateDoc(doc(db, "messages", m.id), { ["readBy." + uid]: true }).catch(() => {}); });
   }, (e) => toast("Pesan gagal dimuat: " + friendlyError(e), "err")));
 
-  if ("Notification" in window && Notification.permission === "default") setTimeout(() => Notification.requestPermission().catch(() => {}), 4000);
+  setTimeout(askPermissions, 1500);
 
   return {
     node: h("div", { class: "chat" }, head, list, replyBar, composer),
