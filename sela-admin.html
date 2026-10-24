@@ -104,10 +104,15 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .call.room .room-grid.duo .rtile.other,.call.room .room-grid.solo .rtile.me{position:absolute;inset:0;border-radius:0}
 .call.room .room-grid.duo .rtile.me{position:absolute;right:12px;top:100px;width:100px;height:140px;z-index:3;border:2px solid #fff}
 .rooms-list .list-item b{display:block}
+
+.obs-chip{display:inline-block;background:#f59e0b;color:#111;border-radius:99px;padding:2px 10px;font-size:.72rem;font-weight:700;margin-top:6px}
+
+.banner{display:inline-block;padding:3px 10px;font-size:.78rem;border-radius:99px;margin-top:6px}
+.vtile{aspect-ratio:1;display:grid;place-items:center;background:#222;border-radius:10px;font-size:2rem;cursor:pointer}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, addDoc, runTransaction, serverTimestamp, deleteField, getDoc, deleteDoc, writeBatch, query, orderBy, limit, where, getCountFromServer, Timestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref as dRef, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 /* ---- firebase-config.js ---- */
@@ -128,9 +133,28 @@ const GROUP_ID = "sela";
 // STUN gratis saja TIDAK cukup untuk semua jaringan (misalnya data seluler tertentu).
 // Tambahkan server TURN (Metered, Twilio, Cloudflare, atau coturn sendiri) agar video call stabil.
 const ICE_SERVERS = [
-  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-  // { urls: "turn:TURN.CONTOH.COM:443?transport=tcp", username: "USER", credential: "PASSWORD" },
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.turnix.io:3478"] },
+  // Turnix (EU Central), TURN gratis. Kredensial berlaku sampai 23 Nov 2026 -> setelah itu buat ulang di turnix.io lalu ganti di sini.
+  {
+    urls: [
+      "turn:eu-central.turnix.io:3478?transport=udp",
+      "turn:eu-central.turnix.io:3478?transport=tcp",
+      "turns:eu-central.turnix.io:443?transport=udp",
+      "turns:eu-central.turnix.io:443?transport=tcp",
+    ],
+    username: "9f36e434-fe46-4c13-a05e-f576c017804c",
+    credential: "9b318bdf5d0492fd8981f232a121ce85",
+  },
+  // Cadangan: ExpressTURN (tidak kedaluwarsa). Isi lalu buka komentar:
+  // { urls: ["turn:free.expressturn.com:3478?transport=udp", "turn:free.expressturn.com:3478?transport=tcp"], username: "USERNAME", credential: "PASSWORD" },
 ];
+
+// Penyimpanan Storj (bucket "sela-media"). Kunci tulis = hanya Write; kunci baca = hanya Read.
+const STORJ = {
+  endpoint: "https://gateway.storjshare.io", bucket: "sela-media", region: "us-1",
+  write: { ak: "jvzspnifdfpusfb77ubfkbiad6kq", sk: "j3dqxcyebjoeauhl7f4rk737q76tzhowczfqn7jzshnzp4tygxub6" },
+  read: { ak: "jwhovjirp5rv7at4h6wnj7eqhdpa", sk: "j365yq24qghznf4b4vfbd6whomunqr3acf5jxkuwmzfzhfgovs3lw" },
+};
 
 /* ---- core.js ---- */
 
@@ -144,7 +168,7 @@ let app, auth, db, rtdb;
 if (configured) {
   app = initializeApp(firebaseConfig);
   // Login disimpan permanen di perangkat (tetap masuk setelah aplikasi ditutup) sampai pengguna menekan Keluar.
-  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] });
+  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence], popupRedirectResolver: browserPopupRedirectResolver });
   try { navigator.storage?.persist?.(); } catch {}
   auth.languageCode = "id";
   db = getFirestore(app);
@@ -193,7 +217,11 @@ function fmtDateTime(ts) {
   const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
   return d ? d.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 }
-function maskPhone(p) { return p ? p.slice(0, 5) + "•••••" + p.slice(-3) : "-"; }
+function maskPhone(p) {
+  if (!p) return "-";
+  if (p.includes("@")) { const [a, d] = p.split("@"); return a.slice(0, 2) + "•••@" + d; }
+  return p.slice(0, 5) + "•••••" + p.slice(-3);
+}
 
 function friendlyError(e) {
   const c = e?.code || "";
@@ -205,7 +233,12 @@ function friendlyError(e) {
     "auth/quota-exceeded": "Kuota SMS Firebase habis. Coba lagi nanti atau hubungi admin.",
     "auth/network-request-failed": "Koneksi internet bermasalah.",
     "auth/captcha-check-failed": "Verifikasi reCAPTCHA gagal. Muat ulang halaman.",
-    "auth/operation-not-allowed": "Login telepon belum diaktifkan di Firebase Console.",
+    "auth/operation-not-allowed": "Metode login ini belum diaktifkan di Firebase Console.",
+    "auth/popup-closed-by-user": "Jendela login Google ditutup sebelum selesai. Coba lagi.",
+    "auth/cancelled-popup-request": "Login dibatalkan. Coba lagi.",
+    "auth/popup-blocked": "Pop-up login diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.",
+    "auth/unauthorized-domain": "Domain situs ini belum ditambahkan di Firebase (Authentication > Settings > Authorized domains).",
+    "auth/account-exists-with-different-credential": "Akun sudah terdaftar dengan metode lain.",
     "permission-denied": "Akses ditolak oleh aturan keamanan server.",
     "unavailable": "Server tidak dapat dihubungi. Periksa koneksi internet.",
   };
@@ -300,6 +333,24 @@ function loginView(title = "Sela Group Chat", subtitle = "Masuk dengan nomor tel
     h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
 }
 
+/* ---------- Login Google (aplikasi anggota) ---------- */
+function googleLoginView(title = "Sela Group Chat", subtitle = "Masuk dengan akun Google") {
+  const err = h("div", { class: "error", role: "alert" });
+  const btn = h("button", { class: "btn primary" }, "Masuk dengan Google");
+  btn.onclick = async () => {
+    err.textContent = ""; btn.disabled = true; btn.textContent = "Membuka Google…";
+    try {
+      const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, prov);
+    } catch (e) { err.textContent = friendlyError(e); btn.disabled = false; btn.textContent = "Masuk dengan Google"; }
+  };
+  return h("div", { class: "screen center" }, h("div", { class: "card stack login" },
+    h("div", { class: "logo" }, "S"), h("h1", {}, title), h("p", { class: "muted" }, subtitle),
+    btn, err,
+    h("p", { class: "muted small" }, "Buka lewat Chrome (bukan browser di dalam WhatsApp atau aplikasi lain) agar login Google berfungsi."),
+    h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
+}
+
 /* ---------- Tanpa Firebase Storage: file kecil disimpan sebagai data URL di Firestore ---------- */
 function blobToDataURL(blob) {
   return new Promise((res, rej) => {
@@ -324,6 +375,105 @@ async function compressImage(file, maxDim = 800, q = 0.6, maxChars = 220000) {
 const mirrorOn = () => { try { return localStorage.getItem("sela-mirror") !== "off"; } catch { return true; } };
 function setMirror(on) { try { localStorage.setItem("sela-mirror", on ? "on" : "off"); } catch {} }
 function applyMirror(v, facing) { if (v) v.style.transform = facing === "user" && mirrorOn() ? "scaleX(-1)" : ""; }
+
+/* ---- storj.js ---- */
+
+
+/*
+ * Penyimpanan foto/video di Storj (S3). Penandatanganan SigV4 dilakukan di browser.
+ *  - uploadMedia: memakai kunci TULIS (hanya Write ke bucket sela-media).
+ *  - loadMedia  : memakai kunci BACA (hanya Read). Nama file acak panjang dan tidak bisa didaftar.
+ *  - deleteMedia: memakai kunci ADMIN yang ditempel sendiri oleh admin (tidak ada di kode).
+ */
+const sjEnc = new TextEncoder();
+const sjHex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+const sjSha = async (d) => sjHex(await crypto.subtle.digest("SHA-256", d instanceof ArrayBuffer ? d : sjEnc.encode(d)));
+async function sjHmac(key, msg) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, sjEnc.encode(msg)));
+}
+async function sjFetch(method, key, creds, body, contentType) {
+  const host = new URL(STORJ.endpoint).host;
+  const amz = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const date = amz.slice(0, 8);
+  const buf = body ? await body.arrayBuffer() : null;
+  const payload = await sjSha(buf || "");
+  const path = "/" + STORJ.bucket + "/" + key;
+  const hd = { "x-amz-content-sha256": payload, "x-amz-date": amz };
+  let canonH = "", names = [];
+  if (contentType) { hd["Content-Type"] = contentType; canonH += `content-type:${contentType}\n`; names.push("content-type"); }
+  canonH += `host:${host}\nx-amz-content-sha256:${payload}\nx-amz-date:${amz}\n`; names.push("host", "x-amz-content-sha256", "x-amz-date");
+  const canon = [method, path, "", canonH, names.join(";"), payload].join("\n");
+  const scope = `${date}/${STORJ.region}/s3/aws4_request`;
+  const sts = ["AWS4-HMAC-SHA256", amz, scope, await sjSha(canon)].join("\n");
+  let k = await sjHmac(sjEnc.encode("AWS4" + creds.sk), date);
+  k = await sjHmac(k, STORJ.region); k = await sjHmac(k, "s3"); k = await sjHmac(k, "aws4_request");
+  hd.Authorization = `AWS4-HMAC-SHA256 Credential=${creds.ak}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sjHex(await sjHmac(k, sts))}`;
+  return fetch(STORJ.endpoint + path, { method, headers: hd, body: buf || undefined });
+}
+
+const SJ_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/webm": "webm", "video/mp4": "mp4", "video/quicktime": "mov" };
+async function uploadMedia(blob, mime) {
+  const mt = (mime || blob.type || "application/octet-stream").split(";")[0];
+  const ext = SJ_EXT[mt] || "bin";
+  const rnd = crypto.getRandomValues(new Uint8Array(12));
+  const key = "m/" + sjHex(rnd) + "." + ext;
+  const r = await sjFetch("PUT", key, STORJ.write, blob, mt);
+  if (!r.ok) throw new Error("Unggah ke penyimpanan gagal (" + r.status + ").");
+  return { key, mime: mt, size: blob.size };
+}
+
+const sjCache = new Map();
+function loadMedia(key, mime) {
+  if (!sjCache.has(key)) {
+    sjCache.set(key, (async () => {
+      const r = await sjFetch("GET", key, STORJ.read);
+      if (!r.ok) throw new Error("Gagal memuat media (" + r.status + ").");
+      const b = await r.blob();
+      return URL.createObjectURL(mime ? new Blob([b], { type: mime }) : b);
+    })().catch((e) => { sjCache.delete(key); throw e; }));
+  }
+  return sjCache.get(key);
+}
+
+function sjAdminKey() {
+  try { const s = JSON.parse(localStorage.getItem("sela-storj-admin") || "null"); if (s?.ak && s?.sk) return s; } catch {}
+  const ak = (prompt("Tempel Access Key ADMIN Storj (hanya admin, tersimpan di HP ini):") || "").trim();
+  const sk = ak ? (prompt("Tempel Secret Key ADMIN Storj:") || "").trim() : "";
+  if (!ak || !sk) return null;
+  try { localStorage.setItem("sela-storj-admin", JSON.stringify({ ak, sk })); } catch {}
+  return { ak, sk };
+}
+function forgetAdminKey() { try { localStorage.removeItem("sela-storj-admin"); } catch {} }
+async function deleteMedia(key) {
+  const c = sjAdminKey(); if (!c) throw new Error("Kunci admin Storj belum diisi.");
+  const r = await sjFetch("DELETE", key, c);
+  if (!r.ok && r.status !== 404) { if (r.status === 403) forgetAdminKey(); throw new Error("Hapus file gagal (" + r.status + ")."); }
+}
+
+// Elemen tampilan media untuk satu pesan (data lama di Firestore maupun file di Storj).
+function mediaEl(m, o = {}) {
+  const open = o.onOpen;
+  if (m.imageData) return h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: open });
+  if (m.videoData) return h("video", { src: m.videoData, controls: !o.tile, muted: !!o.tile, preload: "metadata", playsinline: true, onclick: o.tile ? open : null });
+  if (!m.mediaKey) return null;
+  const isVid = m.messageType === "video" || String(m.mime || "").startsWith("video/");
+  if (!isVid) {
+    const im = h("img", { alt: "Foto", onclick: open });
+    loadMedia(m.mediaKey, m.mime).then((u) => { im.src = u; }).catch(() => im.replaceWith(h("div", { class: "muted small" }, "⚠ Foto gagal dimuat")));
+    return im;
+  }
+  if (o.tile) return h("div", { class: "vtile", onclick: open }, "🎬");
+  const mb = m.size ? " (" + (m.size / 1048576).toFixed(1) + " MB)" : "";
+  const holder = h("div", {});
+  const play = async () => {
+    holder.replaceChildren(h("div", { class: "muted small" }, "Memuat video…"));
+    try { const u = await loadMedia(m.mediaKey, m.mime); holder.replaceChildren(h("video", { src: u, controls: true, autoplay: true, playsinline: true, style: "width:100%;border-radius:12px" })); }
+    catch { holder.replaceChildren(h("button", { class: "btn ghost small", onclick: play }, "⚠ Gagal memuat. Coba lagi")); }
+  };
+  if (o.auto) play(); else holder.append(h("button", { class: "btn ghost small", onclick: play }, "▶ Putar video" + mb));
+  return holder;
+}
 
 /* ---- room.js ---- */
 
@@ -480,10 +630,11 @@ class RoomManager {
     const title = h("b", {}, "Room " + rid.slice(1));
     const count = h("div", {}, "");
     const banner = h("div", { class: "banner hidden" });
+    const chip = h("div", { class: "obs-chip hidden" }, "👁 Dipantau admin");
     const ctrls = h("div", { class: "ctrls" });
-    const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner), ctrls);
+    const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner, chip), ctrls);
     this.root.append(el);
-    this.ui = { el, grid, count, banner, ctrls };
+    this.ui = { el, grid, count, banner, chip, ctrls };
     this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local; applyMirror(this.me.video, this.facing);
     const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
     const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
@@ -511,6 +662,7 @@ class RoomManager {
     this.ui.count.textContent = `${n}/${ROOM_CAP} peserta` + (n > 5 ? " · matikan kamera agar lancar" : "");
   }
   closeUI() { this.ui?.el.remove(); this.ui = null; }
+  setChip(on) { const c = this.ui?.chip; if (c) c.classList.toggle("hidden", !on); }
   setBanner(t, ms) {
     const b = this.ui?.banner; if (!b) return;
     b.textContent = t || ""; b.classList.toggle("hidden", !t);
@@ -534,10 +686,9 @@ class RoomManager {
     this.unsubs.push(onSnapshot(collection(this.db, "rooms", rid, "observers"), (snap) => {
       snap.docChanges().forEach((c) => {
         if (c.type === "added") {
-          this.setBanner("👁 Admin Sela bergabung sebagai pemantau room (admin tidak mengirim suara/video).");
-          toast("Admin Sela bergabung sebagai pemantau room ini.");
+          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
           this.serveAdmin(c.doc.id);
-        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setBanner("Admin Sela keluar dari pemantauan.", 5000); }
+        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner("👸 Admin keluar", 4000); }
       });
     }, () => {}));
   }
@@ -585,6 +736,7 @@ class RoomManager {
 }
 
 /* ---- admin.js ---- */
+
 
 
 
@@ -726,7 +878,7 @@ function startAdmin(admin) {
   function statusBadge(s) { return h("span", { class: "badge " + s }, { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak", active: "Aktif", restricted: "Dibatasi", removed: "Dikeluarkan", open: "Terbuka", resolved: "Selesai" }[s] || s); }
   function phoneEl(uid) {
     const u = D.users.find((x) => x.uid === uid); const shown = phoneState.has(uid);
-    return h("span", {}, shown ? u?.phoneNumber : maskPhone(u?.phoneNumber), " ",
+    return h("span", {}, shown ? (u?.email || u?.phoneNumber) : maskPhone(u?.email || u?.phoneNumber), " ",
       h("a", { href: "#", onclick: (e) => { e.preventDefault(); if (shown) phoneState.delete(uid); else { phoneState.add(uid); audit("view_phone", uid); } render(); } }, shown ? "sembunyikan" : "tampilkan"));
   }
   function stat(n, t) { return h("div", { class: "stat" }, h("b", {}, n ?? "…"), h("span", {}, t)); }
@@ -779,7 +931,7 @@ function startAdmin(admin) {
   function profile(uid) {
     const u = D.users.find((x) => x.uid === uid); const r = D.reqs.find((x) => x.id === uid);
     openSheet("Profil " + nameOf(uid), h("div", { class: "stack" },
-      h("div", {}, "Nomor: ", phoneEl(uid)), h("div", {}, "Terdaftar: " + fmtDateTime(u?.createdAt)),
+      h("div", {}, "Kontak: ", phoneEl(uid)), h("div", {}, "Terdaftar: " + fmtDateTime(u?.createdAt)),
       r ? h("div", {}, "Pengajuan: ", statusBadge(r.status), " · " + fmtDateTime(r.submittedAt)) : h("div", { class: "muted" }, "Belum ada pengajuan."),
       r?.rejectionReason ? h("div", { class: "muted" }, "Alasan: " + r.rejectionReason) : null,
       editProfile(uid)));
@@ -824,19 +976,27 @@ function startAdmin(admin) {
   }
   async function delMsg(m) {
     if (!confirm("Hapus pesan ini dari grup?")) return;
-    try { await deleteDoc(doc(db, "messages", m.id)); audit("delete_message", m.id, { senderUid: m.senderUid, reason: "moderasi admin" }); toast("Pesan dihapus", "good"); }
-    catch (e) { fail(e); }
+    return removeMsg(m, "moderasi admin");
+  }
+  async function removeMsg(m, reason) {
+    try {
+      await deleteDoc(doc(db, "messages", m.id)); audit("delete_message", m.id, { senderUid: m.senderUid, reason, mediaKey: m.mediaKey || null });
+      if (m.mediaKey) {
+        try { await deleteMedia(m.mediaKey); toast("Pesan dan file dihapus", "good"); }
+        catch (e) { toast("Pesan dihapus, tapi file di Storj belum terhapus: " + e.message, "err"); }
+      } else toast("Pesan dihapus", "good");
+      return true;
+    } catch (e) { fail(e); return false; }
   }
   function kickSender(m) { const mem = D.members.find((x) => x.uid === m.senderUid); if (mem) setMemberStatus(mem, "removed", "Keluarkan"); else toast("Pengirim bukan anggota aktif", "err"); }
   function chat() {
     return [h("p", { class: "muted small" }, "100 pesan grup terbaru, muncul real-time. Hapus pesan atau media yang melanggar, atau keluarkan pengirimnya."),
       D.messages.length ? D.messages.map((m) => h("div", { class: "card stack" },
         h("div", { class: "row" }, h("b", { class: "grow" }, nameOf(m.senderUid)), h("span", { class: "muted small" }, fmtDateTime(m.createdAt))),
-        m.imageData ? h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px", onclick: () => mediaDetail(m) }) : null,
-        m.videoData ? h("video", { src: m.videoData, controls: true, preload: "none", playsinline: true, style: "width:100%;border-radius:12px" }) : null,
+        mediaEl(m, { onOpen: () => mediaDetail(m) }),
         m.text ? h("div", { style: "white-space:pre-wrap;word-break:break-word" }, m.text) : null,
         h("div", { class: "row wrap" },
-          h("button", { class: "btn danger small", onclick: () => delMsg(m) }, m.imageData ? "🗑 Hapus media ini" : m.videoData ? "🗑 Hapus video ini" : "🗑 Hapus pesan ini"),
+          h("button", { class: "btn danger small", onclick: () => delMsg(m) }, (m.imageData || m.videoData || m.mediaKey) ? "🗑 Hapus media ini" : "🗑 Hapus pesan ini"),
           h("button", { class: "btn ghost small", onclick: () => kickSender(m) }, "Keluarkan pengirim")))) : h("p", { class: "muted" }, "Belum ada pesan.")];
   }
   const robs = { rid: null, items: new Map(), unsubs: [], el: null };
@@ -962,21 +1122,20 @@ function startAdmin(admin) {
   }
 
   function media() {
-    const items = D.messages.filter((m) => m.imageData || m.videoData);
+    const items = D.messages.filter((m) => m.imageData || m.videoData || m.mediaKey);
     return [h("p", { class: "muted small" }, "Foto dan video yang dikirim ke grup (60 pesan terbaru). Hapus yang melanggar aturan atau keluarkan pengirimnya."),
-      items.length ? h("div", { class: "gallery" }, items.map((m) => m.videoData ? h("video", { src: m.videoData, muted: true, preload: "metadata", onclick: () => mediaDetail(m) }) : h("img", { src: m.imageData, alt: "", onclick: () => mediaDetail(m) }))) : h("p", { class: "muted" }, "Belum ada foto atau video.")];
+      items.length ? h("div", { class: "gallery" }, items.map((m) => mediaEl(m, { tile: true, onOpen: () => mediaDetail(m) }))) : h("p", { class: "muted" }, "Belum ada foto atau video.")];
   }
   function mediaDetail(m) {
     let close = () => {};
     const del = h("button", { class: "btn danger" }, "🗑 Hapus media ini");
     del.onclick = async () => {
       if (!confirm("Hapus pesan ini dari grup?")) return; del.disabled = true;
-      try { await deleteDoc(doc(db, "messages", m.id)); audit("delete_message", m.id, { senderUid: m.senderUid, reason: "moderasi media" }); toast("Dihapus", "good"); close(); }
-      catch (e) { fail(e); del.disabled = false; }
+      if (await removeMsg(m, "moderasi media")) close(); else del.disabled = false;
     };
     const kick = h("button", { class: "btn ghost", onclick: () => { close(); const mem = D.members.find((x) => x.uid === m.senderUid); if (mem) setMemberStatus(mem, "removed", "Keluarkan"); else toast("Pengirim bukan anggota aktif", "err"); } }, "Keluarkan pengirim dari grup");
     close = openSheet("Foto dari " + nameOf(m.senderUid), h("div", { class: "stack" },
-      (m.videoData ? h("video", { src: m.videoData, controls: true, playsinline: true, style: "width:100%;border-radius:12px" }) : h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px" })),
+      mediaEl(m, { auto: true }),
       m.text ? h("p", {}, m.text) : null, h("div", { class: "muted small" }, fmtDateTime(m.createdAt)), del, kick));
   }
 
