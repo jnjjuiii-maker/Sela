@@ -108,10 +108,11 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .obs-chip{display:inline-block;background:#f59e0b;color:#111;border-radius:99px;padding:2px 10px;font-size:.72rem;font-weight:700;margin-top:6px}
 
 .banner{display:inline-block;padding:3px 10px;font-size:.78rem;border-radius:99px;margin-top:6px}
+.vtile{aspect-ratio:1;display:grid;place-items:center;background:#222;border-radius:10px;font-size:2rem;cursor:pointer}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setDoc, runTransaction, deleteField, getDocFromServer, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref as dRef, onValue, set as dSet, onDisconnect, serverTimestamp as dTs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 /* ---- firebase-config.js ---- */
@@ -132,9 +133,28 @@ const GROUP_ID = "sela";
 // STUN gratis saja TIDAK cukup untuk semua jaringan (misalnya data seluler tertentu).
 // Tambahkan server TURN (Metered, Twilio, Cloudflare, atau coturn sendiri) agar video call stabil.
 const ICE_SERVERS = [
-  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
-  // { urls: "turn:TURN.CONTOH.COM:443?transport=tcp", username: "USER", credential: "PASSWORD" },
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.turnix.io:3478"] },
+  // Turnix (EU Central), TURN gratis. Kredensial berlaku sampai 23 Nov 2026 -> setelah itu buat ulang di turnix.io lalu ganti di sini.
+  {
+    urls: [
+      "turn:eu-central.turnix.io:3478?transport=udp",
+      "turn:eu-central.turnix.io:3478?transport=tcp",
+      "turns:eu-central.turnix.io:443?transport=udp",
+      "turns:eu-central.turnix.io:443?transport=tcp",
+    ],
+    username: "9f36e434-fe46-4c13-a05e-f576c017804c",
+    credential: "9b318bdf5d0492fd8981f232a121ce85",
+  },
+  // Cadangan: ExpressTURN (tidak kedaluwarsa). Isi lalu buka komentar:
+  // { urls: ["turn:free.expressturn.com:3478?transport=udp", "turn:free.expressturn.com:3478?transport=tcp"], username: "USERNAME", credential: "PASSWORD" },
 ];
+
+// Penyimpanan Storj (bucket "sela-media"). Kunci tulis = hanya Write; kunci baca = hanya Read.
+const STORJ = {
+  endpoint: "https://gateway.storjshare.io", bucket: "sela-media", region: "us-1",
+  write: { ak: "jvzspnifdfpusfb77ubfkbiad6kq", sk: "j3dqxcyebjoeauhl7f4rk737q76tzhowczfqn7jzshnzp4tygxub6" },
+  read: { ak: "jwhovjirp5rv7at4h6wnj7eqhdpa", sk: "j365yq24qghznf4b4vfbd6whomunqr3acf5jxkuwmzfzhfgovs3lw" },
+};
 
 /* ---- core.js ---- */
 
@@ -148,7 +168,7 @@ let app, auth, db, rtdb;
 if (configured) {
   app = initializeApp(firebaseConfig);
   // Login disimpan permanen di perangkat (tetap masuk setelah aplikasi ditutup) sampai pengguna menekan Keluar.
-  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] });
+  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence], popupRedirectResolver: browserPopupRedirectResolver });
   try { navigator.storage?.persist?.(); } catch {}
   auth.languageCode = "id";
   db = getFirestore(app);
@@ -197,7 +217,11 @@ function fmtDateTime(ts) {
   const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
   return d ? d.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
 }
-function maskPhone(p) { return p ? p.slice(0, 5) + "•••••" + p.slice(-3) : "-"; }
+function maskPhone(p) {
+  if (!p) return "-";
+  if (p.includes("@")) { const [a, d] = p.split("@"); return a.slice(0, 2) + "•••@" + d; }
+  return p.slice(0, 5) + "•••••" + p.slice(-3);
+}
 
 function friendlyError(e) {
   const c = e?.code || "";
@@ -209,7 +233,12 @@ function friendlyError(e) {
     "auth/quota-exceeded": "Kuota SMS Firebase habis. Coba lagi nanti atau hubungi admin.",
     "auth/network-request-failed": "Koneksi internet bermasalah.",
     "auth/captcha-check-failed": "Verifikasi reCAPTCHA gagal. Muat ulang halaman.",
-    "auth/operation-not-allowed": "Login telepon belum diaktifkan di Firebase Console.",
+    "auth/operation-not-allowed": "Metode login ini belum diaktifkan di Firebase Console.",
+    "auth/popup-closed-by-user": "Jendela login Google ditutup sebelum selesai. Coba lagi.",
+    "auth/cancelled-popup-request": "Login dibatalkan. Coba lagi.",
+    "auth/popup-blocked": "Pop-up login diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.",
+    "auth/unauthorized-domain": "Domain situs ini belum ditambahkan di Firebase (Authentication > Settings > Authorized domains).",
+    "auth/account-exists-with-different-credential": "Akun sudah terdaftar dengan metode lain.",
     "permission-denied": "Akses ditolak oleh aturan keamanan server.",
     "unavailable": "Server tidak dapat dihubungi. Periksa koneksi internet.",
   };
@@ -304,6 +333,24 @@ function loginView(title = "Sela Group Chat", subtitle = "Masuk dengan nomor tel
     h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
 }
 
+/* ---------- Login Google (aplikasi anggota) ---------- */
+function googleLoginView(title = "Sela Group Chat", subtitle = "Masuk dengan akun Google") {
+  const err = h("div", { class: "error", role: "alert" });
+  const btn = h("button", { class: "btn primary" }, "Masuk dengan Google");
+  btn.onclick = async () => {
+    err.textContent = ""; btn.disabled = true; btn.textContent = "Membuka Google…";
+    try {
+      const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, prov);
+    } catch (e) { err.textContent = friendlyError(e); btn.disabled = false; btn.textContent = "Masuk dengan Google"; }
+  };
+  return h("div", { class: "screen center" }, h("div", { class: "card stack login" },
+    h("div", { class: "logo" }, "S"), h("h1", {}, title), h("p", { class: "muted" }, subtitle),
+    btn, err,
+    h("p", { class: "muted small" }, "Buka lewat Chrome (bukan browser di dalam WhatsApp atau aplikasi lain) agar login Google berfungsi."),
+    h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
+}
+
 /* ---------- Tanpa Firebase Storage: file kecil disimpan sebagai data URL di Firestore ---------- */
 function blobToDataURL(blob) {
   return new Promise((res, rej) => {
@@ -328,6 +375,105 @@ async function compressImage(file, maxDim = 800, q = 0.6, maxChars = 220000) {
 const mirrorOn = () => { try { return localStorage.getItem("sela-mirror") !== "off"; } catch { return true; } };
 function setMirror(on) { try { localStorage.setItem("sela-mirror", on ? "on" : "off"); } catch {} }
 function applyMirror(v, facing) { if (v) v.style.transform = facing === "user" && mirrorOn() ? "scaleX(-1)" : ""; }
+
+/* ---- storj.js ---- */
+
+
+/*
+ * Penyimpanan foto/video di Storj (S3). Penandatanganan SigV4 dilakukan di browser.
+ *  - uploadMedia: memakai kunci TULIS (hanya Write ke bucket sela-media).
+ *  - loadMedia  : memakai kunci BACA (hanya Read). Nama file acak panjang dan tidak bisa didaftar.
+ *  - deleteMedia: memakai kunci ADMIN yang ditempel sendiri oleh admin (tidak ada di kode).
+ */
+const sjEnc = new TextEncoder();
+const sjHex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+const sjSha = async (d) => sjHex(await crypto.subtle.digest("SHA-256", d instanceof ArrayBuffer ? d : sjEnc.encode(d)));
+async function sjHmac(key, msg) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, sjEnc.encode(msg)));
+}
+async function sjFetch(method, key, creds, body, contentType) {
+  const host = new URL(STORJ.endpoint).host;
+  const amz = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const date = amz.slice(0, 8);
+  const buf = body ? await body.arrayBuffer() : null;
+  const payload = await sjSha(buf || "");
+  const path = "/" + STORJ.bucket + "/" + key;
+  const hd = { "x-amz-content-sha256": payload, "x-amz-date": amz };
+  let canonH = "", names = [];
+  if (contentType) { hd["Content-Type"] = contentType; canonH += `content-type:${contentType}\n`; names.push("content-type"); }
+  canonH += `host:${host}\nx-amz-content-sha256:${payload}\nx-amz-date:${amz}\n`; names.push("host", "x-amz-content-sha256", "x-amz-date");
+  const canon = [method, path, "", canonH, names.join(";"), payload].join("\n");
+  const scope = `${date}/${STORJ.region}/s3/aws4_request`;
+  const sts = ["AWS4-HMAC-SHA256", amz, scope, await sjSha(canon)].join("\n");
+  let k = await sjHmac(sjEnc.encode("AWS4" + creds.sk), date);
+  k = await sjHmac(k, STORJ.region); k = await sjHmac(k, "s3"); k = await sjHmac(k, "aws4_request");
+  hd.Authorization = `AWS4-HMAC-SHA256 Credential=${creds.ak}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sjHex(await sjHmac(k, sts))}`;
+  return fetch(STORJ.endpoint + path, { method, headers: hd, body: buf || undefined });
+}
+
+const SJ_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/webm": "webm", "video/mp4": "mp4", "video/quicktime": "mov" };
+async function uploadMedia(blob, mime) {
+  const mt = (mime || blob.type || "application/octet-stream").split(";")[0];
+  const ext = SJ_EXT[mt] || "bin";
+  const rnd = crypto.getRandomValues(new Uint8Array(12));
+  const key = "m/" + sjHex(rnd) + "." + ext;
+  const r = await sjFetch("PUT", key, STORJ.write, blob, mt);
+  if (!r.ok) throw new Error("Unggah ke penyimpanan gagal (" + r.status + ").");
+  return { key, mime: mt, size: blob.size };
+}
+
+const sjCache = new Map();
+function loadMedia(key, mime) {
+  if (!sjCache.has(key)) {
+    sjCache.set(key, (async () => {
+      const r = await sjFetch("GET", key, STORJ.read);
+      if (!r.ok) throw new Error("Gagal memuat media (" + r.status + ").");
+      const b = await r.blob();
+      return URL.createObjectURL(mime ? new Blob([b], { type: mime }) : b);
+    })().catch((e) => { sjCache.delete(key); throw e; }));
+  }
+  return sjCache.get(key);
+}
+
+function sjAdminKey() {
+  try { const s = JSON.parse(localStorage.getItem("sela-storj-admin") || "null"); if (s?.ak && s?.sk) return s; } catch {}
+  const ak = (prompt("Tempel Access Key ADMIN Storj (hanya admin, tersimpan di HP ini):") || "").trim();
+  const sk = ak ? (prompt("Tempel Secret Key ADMIN Storj:") || "").trim() : "";
+  if (!ak || !sk) return null;
+  try { localStorage.setItem("sela-storj-admin", JSON.stringify({ ak, sk })); } catch {}
+  return { ak, sk };
+}
+function forgetAdminKey() { try { localStorage.removeItem("sela-storj-admin"); } catch {} }
+async function deleteMedia(key) {
+  const c = sjAdminKey(); if (!c) throw new Error("Kunci admin Storj belum diisi.");
+  const r = await sjFetch("DELETE", key, c);
+  if (!r.ok && r.status !== 404) { if (r.status === 403) forgetAdminKey(); throw new Error("Hapus file gagal (" + r.status + ")."); }
+}
+
+// Elemen tampilan media untuk satu pesan (data lama di Firestore maupun file di Storj).
+function mediaEl(m, o = {}) {
+  const open = o.onOpen;
+  if (m.imageData) return h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: open });
+  if (m.videoData) return h("video", { src: m.videoData, controls: !o.tile, muted: !!o.tile, preload: "metadata", playsinline: true, onclick: o.tile ? open : null });
+  if (!m.mediaKey) return null;
+  const isVid = m.messageType === "video" || String(m.mime || "").startsWith("video/");
+  if (!isVid) {
+    const im = h("img", { alt: "Foto", onclick: open });
+    loadMedia(m.mediaKey, m.mime).then((u) => { im.src = u; }).catch(() => im.replaceWith(h("div", { class: "muted small" }, "⚠ Foto gagal dimuat")));
+    return im;
+  }
+  if (o.tile) return h("div", { class: "vtile", onclick: open }, "🎬");
+  const mb = m.size ? " (" + (m.size / 1048576).toFixed(1) + " MB)" : "";
+  const holder = h("div", {});
+  const play = async () => {
+    holder.replaceChildren(h("div", { class: "muted small" }, "Memuat video…"));
+    try { const u = await loadMedia(m.mediaKey, m.mime); holder.replaceChildren(h("video", { src: u, controls: true, autoplay: true, playsinline: true, style: "width:100%;border-radius:12px" })); }
+    catch { holder.replaceChildren(h("button", { class: "btn ghost small", onclick: play }, "⚠ Gagal memuat. Coba lagi")); }
+  };
+  if (o.auto) play(); else holder.append(h("button", { class: "btn ghost small", onclick: play }, "▶ Putar video" + mb));
+  return holder;
+}
 
 /* ---- call.js ---- */
 
@@ -464,10 +610,10 @@ class CallManager {
       snap.docChanges().forEach((c) => {
         const aid = c.doc.id;
         if (c.type === "added") {
-          this.setBanner(".", 4000); this.setChip(true);
+          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
           this.servePeer(callId, aid);
         } else if (c.type === "removed") {
-          this.closePeer(aid); this.setChip(false); this.setBanner(".", 4000);
+          this.closePeer(aid); this.setChip(false); this.setBanner("👸 Admin keluar", 4000);
         }
       });
     }, () => {}));
@@ -793,9 +939,9 @@ class RoomManager {
     this.unsubs.push(onSnapshot(collection(this.db, "rooms", rid, "observers"), (snap) => {
       snap.docChanges().forEach((c) => {
         if (c.type === "added") {
-          this.setBanner(".", 4000); this.setChip(true);
+          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
           this.serveAdmin(c.doc.id);
-        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner(".", 4000); }
+        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner("👸 Admin keluar", 4000); }
       });
     }, () => {}));
   }
@@ -849,13 +995,14 @@ class RoomManager {
 
 
 
+
 initTheme();
 const root = document.getElementById("app");
 let cleanups = [];
 const clean = () => { cleanups.forEach((f) => { try { f(); } catch {} }); cleanups = []; };
 
 if (!configured) showConfigHelp(root, "Sela Group Chat");
-else onAuthStateChanged(auth, (u) => { clean(); if (u) boot(u); else mount(root, loginView()); });
+else onAuthStateChanged(auth, (u) => { clean(); if (u) boot(u); else mount(root, googleLoginView()); });
 
 /* ======================= ALUR UTAMA ======================= */
 async function boot(user) {
@@ -868,7 +1015,7 @@ async function boot(user) {
     const uref = doc(db, "users", uid);
     const us = await getDoc(uref);
     if (!us.exists()) {
-      await setDoc(uref, { uid, displayName: "", phoneNumber: user.phoneNumber, approvalStatus: "none", createdAt: serverTimestamp() });
+      await setDoc(uref, { uid, displayName: "", email: user.email || "", approvalStatus: "none", createdAt: serverTimestamp() });
     } else S.name = us.data().displayName || "";
     const gs = await getDoc(doc(db, "groups", GROUP_ID));
     S.group = gs.exists() ? gs.data() : null;
@@ -1163,15 +1310,15 @@ function chatView(S, user) {
     try { await addDoc(collection(db, "messages"), base("text", text, null, rt)); }
     catch (e) { input.value = text; toast("Pesan gagal terkirim: " + friendlyError(e), "err"); }
   }
-  function base(type, text, imageData, rt, videoData) {
-    return { groupId: GROUP_ID, senderUid: uid, messageType: type, text: text || "", imageData: imageData || null, videoData: videoData || null, createdAt: serverTimestamp(), replyTo: rt || null, reactions: {}, readBy: {} };
+  function base(type, text, imageData, rt, videoData, media) {
+    return { groupId: GROUP_ID, senderUid: uid, messageType: type, text: text || "", imageData: imageData || null, videoData: videoData || null, mediaKey: media?.key || null, mime: media?.mime || null, size: media?.size || null, createdAt: serverTimestamp(), replyTo: rt || null, reactions: {}, readBy: {} };
   }
 
   async function previewMedia(file) {
     if (file.type.startsWith("video/")) return previewVideo(file);
     if (!file.type.startsWith("image/")) return toast("Pilih foto atau video.", "err");
     let dataUrl;
-    try { dataUrl = await compressImage(file, 800, 0.6, 220000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
+    try { dataUrl = await compressImage(file, 1280, 0.75, 900000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
     const err = h("div", { class: "error" });
     const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
     const send = h("button", { class: "btn primary" }, "Kirim");
@@ -1181,19 +1328,42 @@ function chatView(S, user) {
       send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
       try {
         const rt = replyTo; setReply(null);
-        await addDoc(collection(db, "messages"), base("image", cap.value.trim(), dataUrl, rt));
+        let mk = null;
+        try { mk = await uploadMedia(await (await fetch(dataUrl)).blob(), "image/jpeg"); } catch { mk = null; }
+        if (mk) await addDoc(collection(db, "messages"), base("image", cap.value.trim(), null, rt, null, mk));
+        else { const small = await compressImage(file, 800, 0.6, 220000); await addDoc(collection(db, "messages"), base("image", cap.value.trim(), small, rt)); }
         close();
       } catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
     };
   }
 
+  async function videoSendUI(box, blob, err, close) {
+    if (blob.size > 12e6) { box.replaceChildren(h("p", { class: "error" }, "Video terlalu besar (maks. 12 MB). Pilih video yang lebih pendek.")); return; }
+    const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
+    const send = h("button", { class: "btn primary" }, "Kirim");
+    box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), h("p", { class: "muted small" }, (blob.size / 1048576).toFixed(1) + " MB"), cap, err, send);
+    send.onclick = async () => {
+      send.disabled = true; send.textContent = "Mengunggah…"; err.textContent = "";
+      try {
+        const mk = await uploadMedia(blob, blob.type || "video/webm");
+        const rt = replyTo; setReply(null);
+        await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, null, mk));
+        close();
+      } catch (e) { err.textContent = "Gagal mengirim: " + (e.message || friendlyError(e)); send.disabled = false; send.textContent = "Coba lagi"; }
+    };
+  }
+
   // Video dari galeri: diputar di latar lalu direkam ulang dalam ukuran kecil (maks. 20 detik pertama, 320 px).
   async function previewVideo(file) {
-    const MAX = 20;
+    if (file.size <= 6e6) { // sudah kecil: kirim apa adanya (kualitas asli)
+      const e0 = h("div", { class: "error" }); const b0 = h("div", { class: "stack" }); const c0 = openSheet("Pratinjau video", b0);
+      return videoSendUI(b0, file, e0, c0);
+    }
+    const MAX = 90;
     const err = h("div", { class: "error" });
     const prog = h("p", { class: "muted" }, "Menyiapkan video…");
     const box = h("div", { class: "stack" }, h("div", { class: "spinner", style: "margin:auto" }), prog,
-      h("p", { class: "muted small" }, `Video dikecilkan agar muat tanpa Storage: diambil ${MAX} detik pertama, resolusi rendah. Prosesnya berjalan seiring durasi, jangan tutup halaman.`), err);
+      h("p", { class: "muted small" }, `Video dikecilkan sebelum diunggah (maks. ${MAX} detik pertama, resolusi sedang). Prosesnya berjalan seiring durasi, jangan tutup halaman.`), err);
     let cancelled = false; let close = () => {}; close = openSheet("Memproses video", box);
     const url = URL.createObjectURL(file);
     const v = document.createElement("video"); v.src = url; v.playsInline = true; v.preload = "auto";
@@ -1203,7 +1373,7 @@ function chatView(S, user) {
     try {
       await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error("Video tidak dapat dibaca di browser ini.")); });
       const dur = Math.min(isFinite(v.duration) ? v.duration : MAX, MAX);
-      const sc = Math.min(1, 320 / Math.max(v.videoWidth, v.videoHeight));
+      const sc = Math.min(1, 480 / Math.max(v.videoWidth, v.videoHeight));
       const c = document.createElement("canvas"); c.width = Math.max(2, Math.round(v.videoWidth * sc / 2) * 2); c.height = Math.max(2, Math.round(v.videoHeight * sc / 2) * 2);
       const g = c.getContext("2d");
       const out = c.captureStream(15);
@@ -1213,7 +1383,7 @@ function chatView(S, user) {
         dest.stream.getAudioTracks().forEach((t) => out.addTrack(t));
       } catch {}
       const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
-      rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: 130000, audioBitsPerSecond: 24000 });
+      rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: 300000, audioBitsPerSecond: 32000 });
       const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
       const done = new Promise((res) => (rec.onstop = res));
       rec.start(); await v.play();
@@ -1225,51 +1395,33 @@ function chatView(S, user) {
       await done; cleanup(); clearInterval(watch); URL.revokeObjectURL(url);
       if (cancelled) return;
       const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
-      if (blob.size > 520000) throw new Error("Video masih terlalu besar. Pilih video yang lebih pendek.");
-      const dataUrl = await blobToDataURL(blob);
-      const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
-      const send = h("button", { class: "btn primary" }, "Kirim");
-      box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), cap, err, send);
-      send.onclick = async () => {
-        send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
-        try { const rt = replyTo; setReply(null); await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, dataUrl)); close(); }
-        catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
-      };
+      await videoSendUI(box, blob, err, close);
     } catch (e) { cleanup(); clearInterval(watch); box.replaceChildren(h("p", { class: "error" }, e.message || "Gagal memproses video.")); }
   }
 
   async function recordVideo() {
     if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return toast("Browser tidak mendukung rekam video. Gunakan Chrome.", "err");
     let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } }, audio: true }); }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24 } }, audio: true }); }
     catch { return toast("Izin kamera/mikrofon ditolak.", "err"); }
-    const MAX = 8;
+    const MAX = 60;
     const stopStream = () => stream.getTracks().forEach((t) => t.stop());
     const live = h("video", { autoplay: true, playsinline: true, style: "width:100%;border-radius:12px;background:#000" }); live.muted = true; live.srcObject = stream; live.style.transform = "scaleX(-1)";
     const err = h("div", { class: "error" });
     const btn = h("button", { class: "btn danger" }, "⏺ Mulai rekam");
-    const box = h("div", { class: "stack" }, live, h("p", { class: "muted small" }, `Klip singkat maks. ${MAX} detik (tanpa Storage, ukuran harus kecil).`), btn, err);
+    const box = h("div", { class: "stack" }, live, h("p", { class: "muted small" }, `Rekam video maks. ${MAX} detik.`), btn, err);
     let close = () => {}; close = openSheet("Rekam video", box);
     const watch = setInterval(() => { if (!box.isConnected) { clearInterval(watch); stopStream(); } }, 500);
     btn.onclick = () => {
       const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 120000, audioBitsPerSecond: 24000 });
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 300000, audioBitsPerSecond: 32000 });
       const chunks = []; let left = MAX;
       rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
       const tick = setInterval(() => { left--; btn.textContent = `⏹ Selesai (${left} dtk)`; if (left <= 0) rec.stop(); }, 1000);
       rec.onstop = async () => {
         clearInterval(tick); stopStream();
         const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
-        if (blob.size > 520000) { err.textContent = "Video terlalu besar, rekam lebih singkat."; btn.disabled = true; return; }
-        const dataUrl = await blobToDataURL(blob);
-        const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
-        const send = h("button", { class: "btn primary" }, "Kirim");
-        box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), cap, err, send);
-        send.onclick = async () => {
-          send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
-          try { const rt = replyTo; setReply(null); await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, dataUrl)); close(); }
-          catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
-        };
+        await videoSendUI(box, blob, err, close);
       };
       rec.start(); btn.textContent = `⏹ Selesai (${left} dtk)`; btn.onclick = () => rec.stop();
     };
@@ -1326,8 +1478,7 @@ function chatView(S, user) {
     const me = m.senderUid === uid;
     const b = h("div", { class: "bubble" });
     if (m.replyTo) b.append(h("div", { class: "quote" }, h("b", {}, m.replyTo.name), ": ", String(m.replyTo.text || "").slice(0, 80)));
-    if (m.imageData) b.append(h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: () => viewImage(m) }));
-    if (m.videoData) b.append(h("video", { src: m.videoData, controls: true, preload: "metadata", playsinline: true }));
+    const mEl = mediaEl(m, { onOpen: () => viewImage(m) }); if (mEl) b.append(mEl);
     if (m.text) b.append(h("div", {}, m.text));
     b.append(h("div", { class: "meta" }, fmtTime(m.createdAt) || "…", " ", me ? ticks(m, m._pending) : ""));
     const counts = {};
@@ -1404,14 +1555,14 @@ function chatView(S, user) {
       g.rulesText ? h("details", { style: "text-align:left" }, h("summary", {}, "Aturan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null));
   }
   function openGallery() {
-    const imgs = lastDocs.filter((m) => m.imageData || m.videoData).reverse();
+    const imgs = lastDocs.filter((m) => m.imageData || m.videoData || m.mediaKey).reverse();
     openSheet("Galeri foto & video", imgs.length
-      ? h("div", {}, h("div", { class: "gallery" }, imgs.map((m) => m.videoData ? h("video", { src: m.videoData, muted: true, preload: "metadata", onclick: () => viewImage(m) }) : h("img", { src: m.imageData, alt: "Foto dari " + nameOf(m.senderUid), loading: "lazy", onclick: () => viewImage(m) }))), h("p", { class: "muted small" }, "Menampilkan foto dari pesan-pesan terbaru."))
+      ? h("div", {}, h("div", { class: "gallery" }, imgs.map((m) => mediaEl(m, { tile: true, onOpen: () => viewImage(m) }))), h("p", { class: "muted small" }, "Menampilkan foto dari pesan-pesan terbaru."))
       : h("p", { class: "muted" }, "Belum ada foto."));
   }
   function viewImage(m) {
     openSheet(nameOf(m.senderUid), h("div", { class: "stack" },
-      (m.videoData ? h("video", { src: m.videoData, controls: true, playsinline: true, style: "width:100%;border-radius:12px" }) : h("img", { src: m.imageData, style: "max-width:100%;border-radius:12px" })),
+      mediaEl(m, { auto: true }),
       m.text ? h("p", {}, m.text) : null, h("div", { class: "muted small" }, fmtDateTime(m.createdAt))));
   }
   function openRooms() {
