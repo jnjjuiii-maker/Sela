@@ -158,6 +158,11 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .ed-trim{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;font-size:.85rem}
 .ed-trim input{width:100%}
 .ed-info{text-align:center;font-size:.85rem}
+
+.vtile{position:relative;overflow:hidden;background:#222}
+.vtile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;border-radius:0}
+.vtile .vplay{position:relative;z-index:1;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;font-size:1.1rem}
+.vwrap{min-width:200px}
 </style></head><body><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -501,29 +506,54 @@ async function deleteMedia(key) {
 }
 
 // Elemen tampilan media untuk satu pesan (data lama di Firestore maupun file di Storj).
+// Foto dan video langsung tampil (dimuat saat mendekati layar). Elemen di-cache supaya video tidak berhenti saat daftar pesan digambar ulang.
+const sjEls = new Map();
+function sjLazy(el, fn) {
+  if (!("IntersectionObserver" in window)) { fn(); return; }
+  const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); fn(); } }, { rootMargin: "400px" });
+  io.observe(el);
+}
 function mediaEl(m, o = {}) {
   const open = o.onOpen;
   if (m.imageData) return h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: open });
   if (m.videoData) return h("video", { src: m.videoData, controls: !o.tile, muted: !!o.tile, preload: "metadata", playsinline: true, onclick: o.tile ? open : null });
   if (!m.mediaKey) return null;
+  const ck = o.auto ? null : m.mediaKey + (o.tile ? "|t" : "|f");
+  if (ck && sjEls.has(ck)) return sjEls.get(ck);
+  const el = sjBuild(m, o, ck);
+  if (ck && el) sjEls.set(ck, el);
+  return el;
+}
+function sjBuild(m, o, ck) {
+  const open = o.onOpen;
   const isVid = m.messageType === "video" || String(m.mime || "").startsWith("video/");
   if (!isVid) {
     const im = h("img", { alt: "Foto", onclick: open });
-    loadMedia(m.mediaKey, m.mime).then((u) => { im.src = u; }).catch(() => im.replaceWith(h("div", { class: "muted small" }, "⚠ Foto gagal dimuat")));
+    loadMedia(m.mediaKey, m.mime).then((u) => { im.src = u; }).catch(() => { if (ck) sjEls.delete(ck); im.replaceWith(h("div", { class: "muted small" }, "⚠ Foto gagal dimuat")); });
     return im;
   }
-  if (o.tile) return h("div", { class: "vtile", onclick: open }, "🎬");
   const mb = m.size ? " (" + (m.size / 1048576).toFixed(1) + " MB)" : "";
-  const holder = h("div", {});
-  const play = async () => {
-    holder.replaceChildren(h("div", { class: "muted small" }, "Memuat video…"));
-    try { const u = await loadMedia(m.mediaKey, m.mime); holder.replaceChildren(h("video", { src: u, controls: true, autoplay: true, playsinline: true, style: "width:100%;border-radius:12px" })); }
-    catch { holder.replaceChildren(h("button", { class: "btn ghost small", onclick: play }, "⚠ Gagal memuat. Coba lagi")); }
+  if (o.tile) {
+    const t = h("div", { class: "vtile", onclick: open }, h("span", { class: "vplay" }, "▶"));
+    sjLazy(t, async () => {
+      try { const u = await loadMedia(m.mediaKey, m.mime); const v = h("video", { src: u, muted: true, preload: "metadata", playsinline: true }); v.muted = true; v.addEventListener("loadedmetadata", () => { try { v.currentTime = 0.1; } catch {} }); t.prepend(v); }
+      catch { t.append(h("span", { class: "muted small" }, "⚠")); }
+    });
+    return t;
+  }
+  const holder = h("div", { class: "vwrap" }, h("div", { class: "muted small" }, "Memuat video" + mb + "…"));
+  const load = async () => {
+    holder.replaceChildren(h("div", { class: "muted small" }, "Memuat video" + mb + "…"));
+    try {
+      const u = await loadMedia(m.mediaKey, m.mime);
+      const v = h("video", { src: u, controls: true, playsinline: true, preload: "metadata", style: "width:100%;border-radius:12px;max-height:340px;background:#000" });
+      if (o.auto) v.autoplay = true; else v.addEventListener("loadedmetadata", () => { try { v.currentTime = 0.1; } catch {} }, { once: true });
+      holder.replaceChildren(v);
+    } catch { holder.replaceChildren(h("button", { class: "btn ghost small", onclick: load }, "⚠ Gagal memuat. Coba lagi")); }
   };
-  if (o.auto) play(); else holder.append(h("button", { class: "btn ghost small", onclick: play }, "▶ Putar video" + mb));
+  if (o.auto) load(); else sjLazy(holder, load);
   return holder;
 }
-
 
 // ---- Simpan / lihat media ----
 async function mediaURL(m) {
@@ -688,14 +718,16 @@ async function editImage(file) {
       const r = mk(src.height, src.width), g = r.getContext("2d"); g.translate(r.width / 2, r.height / 2); g.rotate(Math.PI / 2); g.drawImage(src, -src.width / 2, -src.height / 2);
       src = r; chips.querySelectorAll(".ed-chip").forEach((x, i) => x.classList.toggle("on", i === 0)); layout();
     } }, "⟳ Putar");
-    tools.append(chips, h("div", { class: "ed-chips" }, rot), h("p", { class: "muted small", style: "text-align:center" }, "Geser kotak atau tarik sudutnya untuk memotong."));
+    let hd = false;
+    const hdBtn = h("button", { class: "ed-chip", onclick: () => { hd = !hd; hdBtn.classList.toggle("on", hd); hdBtn.textContent = hd ? "✓ Kirim HD" : "Kirim HD"; } }, "Kirim HD");
+    tools.append(chips, h("div", { class: "ed-chips" }, rot, hdBtn), h("p", { class: "muted small", style: "text-align:center" }, "Geser kotak atau tarik sudutnya untuk memotong."));
     const end = (v) => { window.removeEventListener("resize", layout); ov.remove(); resolve(v); };
     cancel.onclick = () => end(null);
     done.onclick = async () => {
       const c = crop.get(); const sw = Math.max(1, Math.round(c.w * src.width)), sh = Math.max(1, Math.round(c.h * src.height));
-      const k = Math.min(1, 1600 / Math.max(sw, sh)); const out = mk(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
+      const k = Math.min(1, (hd ? 3000 : 1600) / Math.max(sw, sh)); const out = mk(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
       out.getContext("2d").drawImage(src, Math.round(c.x * src.width), Math.round(c.y * src.height), sw, sh, 0, 0, out.width, out.height);
-      out.toBlob((b) => end(b ? new File([b], "foto.jpg", { type: "image/jpeg" }) : file), "image/jpeg", 0.88);
+      out.toBlob((b) => { if (!b) return end(file); const f = new File([b], "foto.jpg", { type: "image/jpeg" }); f.hd = hd; end(f); }, "image/jpeg", hd ? 0.95 : 0.88);
     };
     window.addEventListener("resize", layout);
     requestAnimationFrame(() => requestAnimationFrame(layout));
@@ -709,7 +741,7 @@ async function editVideo(file, MAX = 90) {
   try { await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error("Video tidak dapat dibaca di browser ini.")); }); }
   catch (e) { URL.revokeObjectURL(url); throw e; }
   const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
-  let start = 0, end = dur ? Math.min(dur, MAX) : 0, mute = false;
+  let start = 0, end = dur ? Math.min(dur, MAX) : 0, mute = false, hd = false;
   return new Promise((resolve) => {
     const { ov, area, tools, cancel, done } = edShell("Sunting video", "Lanjut ➜");
     const stage = h("div", { class: "ed-stage" }, v); area.append(stage);
@@ -724,6 +756,7 @@ async function editVideo(file, MAX = 90) {
     v.addEventListener("play", () => { playBtn.textContent = "⏸ Jeda"; }); v.addEventListener("pause", () => { playBtn.textContent = "▶ Putar"; });
     v.addEventListener("timeupdate", () => { if (dur && v.currentTime >= end) { v.pause(); v.currentTime = start; } });
     const muteBtn = h("button", { class: "ed-chip", onclick: () => { mute = !mute; v.muted = mute; muteBtn.textContent = mute ? "🔇 Audio mati" : "🔊 Audio nyala"; muteBtn.classList.toggle("on", mute); } }, "🔊 Audio nyala");
+    const hdBtn = h("button", { class: "ed-chip", onclick: () => { hd = !hd; hdBtn.classList.toggle("on", hd); hdBtn.textContent = hd ? "✓ Kirim HD" : "Kirim HD"; } }, "Kirim HD");
     if (dur) {
       sS.oninput = () => { start = Number(sS.value); if (start > end - 0.5) { start = Math.max(0, end - 0.5); sS.value = String(start); } if (end - start > MAX) { end = start + MAX; sE.value = String(end); } v.pause(); v.currentTime = start; paintInfo(); };
       sE.oninput = () => { end = Number(sE.value); if (end < start + 0.5) { end = Math.min(dur, start + 0.5); sE.value = String(end); } if (end - start > MAX) { start = end - MAX; sS.value = String(start); } v.pause(); v.currentTime = Math.max(start, end - 0.1); paintInfo(); };
@@ -731,13 +764,13 @@ async function editVideo(file, MAX = 90) {
     paintInfo();
     tools.append(
       h("div", { class: "ed-trim" }, h("label", {}, "Mulai"), sS, h("label", {}, "Selesai"), sE), info,
-      h("div", { class: "ed-chips" }, playBtn, muteBtn), chips,
+      h("div", { class: "ed-chips" }, playBtn, muteBtn, hdBtn), chips,
       h("p", { class: "muted small", style: "text-align:center" }, `Maks. ${MAX} detik. Geser kotak atau tarik sudutnya untuk crop.`));
     const end2 = (val) => { window.removeEventListener("resize", layout); try { v.pause(); } catch {} ov.remove(); URL.revokeObjectURL(url); resolve(val); };
     cancel.onclick = () => end2(null);
     done.onclick = () => {
       const c = crop.get();
-      end2({ start, end: dur ? end : 0, mute, crop: c, changed: mute || !crop.isFull() || (dur ? start > 0.05 || end < dur - 0.05 : false) });
+      end2({ start, end: dur ? end : 0, mute, hd, crop: c, changed: mute || !crop.isFull() || (dur ? start > 0.05 || end < dur - 0.05 : false) });
     };
     v.addEventListener("loadeddata", () => { layout(); v.currentTime = 0.01; }, { once: true });
     requestAnimationFrame(() => requestAnimationFrame(layout));
@@ -757,17 +790,17 @@ async function processVideo(file, o, setProg, cancelled) {
     const cr = o.crop || { x: 0, y: 0, w: 1, h: 1 };
     const sx = Math.round(cr.x * v.videoWidth), sy = Math.round(cr.y * v.videoHeight);
     const sw = Math.max(2, Math.round(cr.w * v.videoWidth)), sh = Math.max(2, Math.round(cr.h * v.videoHeight));
-    const k = Math.min(1, 480 / Math.max(sw, sh));
+    const HD = !!o.hd; const k = Math.min(1, (HD ? 1280 : 480) / Math.max(sw, sh));
     const c = document.createElement("canvas"); c.width = Math.max(2, Math.round(sw * k / 2) * 2); c.height = Math.max(2, Math.round(sh * k / 2) * 2);
     const g = c.getContext("2d");
     if (start > 0) { await new Promise((res) => { v.onseeked = res; v.currentTime = start; }); }
     g.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
-    const out = c.captureStream(15);
+    const out = c.captureStream(HD ? 30 : 15);
     if (!o.mute) {
       try { ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume(); const dest = ctx.createMediaStreamDestination(); ctx.createMediaElementSource(v).connect(dest); dest.stream.getAudioTracks().forEach((t) => out.addTrack(t)); } catch {}
     }
     const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
-    rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: 300000, audioBitsPerSecond: 32000 });
+    rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: HD ? 2500000 : 300000, audioBitsPerSecond: HD ? 96000 : 32000 });
     const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
     const done = new Promise((res) => (rec.onstop = res));
     rec.start(); await v.play();
@@ -775,7 +808,7 @@ async function processVideo(file, o, setProg, cancelled) {
       g.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
       setProg?.(Math.min(100, Math.round(((v.currentTime - start) / Math.max(0.1, end - start)) * 100)));
       if (cancelled?.() || v.currentTime >= end || v.ended) { clearInterval(timer); try { rec.state === "recording" && rec.stop(); } catch {} }
-    }, 66);
+    }, HD ? 33 : 66);
     await done; cleanup();
     if (cancelled?.()) return null;
     return new Blob(chunks, { type: rec.mimeType || "video/webm" });
@@ -1652,7 +1685,7 @@ function chatView(S, user) {
     if (file.type.startsWith("video/")) return previewVideo(file);
     if (!file.type.startsWith("image/")) return toast("Pilih foto atau video.", "err");
     let dataUrl;
-    try { const ed = await editImage(file); if (!ed) return; file = ed; dataUrl = await compressImage(file, 1280, 0.75, 900000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
+    try { const ed = await editImage(file); if (!ed) return; file = ed; dataUrl = file.hd ? await compressImage(file, 2560, 0.92, 1e8) : await compressImage(file, 1280, 0.75, 900000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
     const err = h("div", { class: "error" });
     const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
     const send = h("button", { class: "btn primary" }, "Kirim");
@@ -1671,8 +1704,8 @@ function chatView(S, user) {
     };
   }
 
-  async function videoSendUI(box, blob, err, close) {
-    if (blob.size > 12e6) { box.replaceChildren(h("p", { class: "error" }, "Video terlalu besar (maks. 12 MB). Pilih video yang lebih pendek.")); return; }
+  async function videoSendUI(box, blob, err, close, limit = 12e6) {
+    if (blob.size > limit) { box.replaceChildren(h("p", { class: "error" }, `Video terlalu besar (maks. ${Math.round(limit / 1e6)} MB). Pilih video yang lebih pendek atau pangkas dulu.`)); return; }
     const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
     const send = h("button", { class: "btn primary" }, "Kirim");
     box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), h("p", { class: "muted small" }, (blob.size / 1048576).toFixed(1) + " MB"), cap, err, send);
@@ -1692,9 +1725,9 @@ function chatView(S, user) {
     let ed;
     try { ed = await editVideo(file); } catch (e) { return toast(e.message || "Video tidak dapat dibuka.", "err"); }
     if (!ed) return;
-    if (!ed.changed && file.size <= 6e6) { // tidak diubah dan sudah kecil: kirim apa adanya
-      const e0 = h("div", { class: "error" }); const b0 = h("div", { class: "stack" }); const c0 = openSheet("Pratinjau video", b0);
-      return videoSendUI(b0, file, e0, c0);
+    if (!ed.changed && file.size <= (ed.hd ? 40e6 : 6e6)) { // tidak diubah: kirim apa adanya (kualitas asli bila HD)
+      const e0 = h("div", { class: "error" }); const b0 = h("div", { class: "stack" }); const c0 = openSheet(ed.hd ? "Pratinjau video (HD)" : "Pratinjau video", b0);
+      return videoSendUI(b0, file, e0, c0, ed.hd ? 40e6 : 12e6);
     }
     const err = h("div", { class: "error" });
     const prog = h("p", { class: "muted" }, "Menyiapkan video…");
@@ -1706,7 +1739,7 @@ function chatView(S, user) {
       const blob = await processVideo(file, ed, (p) => { prog.textContent = `Memproses… ${p}%`; }, () => cancelled);
       clearInterval(watch);
       if (!blob || cancelled) return;
-      await videoSendUI(box, blob, err, close);
+      await videoSendUI(box, blob, err, close, ed.hd ? 40e6 : 12e6);
     } catch (e) { clearInterval(watch); box.replaceChildren(h("p", { class: "error" }, e.message || "Gagal memproses video.")); }
   }
 
