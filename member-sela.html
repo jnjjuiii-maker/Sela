@@ -1,0 +1,2081 @@
+<!doctype html>
+<html lang="id" translate="no">
+<head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="google" content="notranslate"><meta http-equiv="Content-Language" content="id"><meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#8b5cf6"><title>Sela Group Chat</title><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes">
+<style>:root{--bg:#f5f0ff;--card:#fff;--text:#2a2140;--muted:#7a6f94;--primary:#8b5cf6;--primary-d:#7c3aed;--accent:#ec4899;--line:#e8dffa;--bubble-me:#e9ddff;--bubble:#fff;--danger:#e11d48;--ok:#16a34a;--warn:#d97706;--r:18px}
+[data-theme=dark]{--bg:#16111f;--card:#211a30;--text:#f1eafe;--muted:#a99cc7;--line:#33294a;--bubble-me:#4c2f8f;--bubble:#2a2140}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;overscroll-behavior:none;-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px}
+#app{min-height:100vh;min-height:100dvh}
+h1{font-size:1.5rem;margin:.2rem 0;text-align:center}h2{margin:.2rem 0}
+.hero{font-size:1.6rem;font-weight:800;text-align:center;background:linear-gradient(90deg,var(--primary),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.2}
+.screen{min-height:100vh;min-height:100dvh;padding:16px;display:flex;flex-direction:column;gap:14px;max-width:560px;margin:0 auto}
+.screen.center{justify-content:center;align-items:center}
+.card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:0 6px 24px rgba(139,92,246,.12);width:100%;border:1px solid var(--line)}
+.stack{display:flex;flex-direction:column;gap:12px}.row{display:flex;gap:10px;align-items:center}.row.wrap{flex-wrap:wrap}.grow{flex:1}
+.muted{color:var(--muted);font-size:.92rem;margin:0}.small{font-size:.85rem}
+.error{color:var(--danger);font-size:.92rem;min-height:1px}.ok{color:var(--ok)}
+.hidden{display:none!important}
+.logo{width:72px;height:72px;border-radius:24px;margin:0 auto;display:grid;place-items:center;font-size:2.2rem;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:0 8px 20px rgba(236,72,153,.3)}
+label{font-weight:600;font-size:.92rem}
+.input,textarea.input,select.input{width:100%;padding:14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font-size:1rem;font-family:inherit}
+.input:focus{outline:none;border-color:var(--primary)}.otp{letter-spacing:.5em;text-align:center;font-size:1.4rem}
+.btn{border:0;border-radius:16px;padding:15px 18px;font-size:1rem;font-weight:700;cursor:pointer;min-height:52px;font-family:inherit;transition:transform .1s,opacity .2s}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff}
+.btn.ghost{background:transparent;color:var(--primary);border:1.5px solid var(--line)}
+.btn.danger{background:var(--danger);color:#fff}.btn.ok{background:var(--ok);color:#fff}
+.btn.small{min-height:38px;padding:8px 12px;font-size:.88rem;border-radius:12px}
+.icon-btn{border:0;background:transparent;color:inherit;font-size:1.3rem;width:44px;height:44px;border-radius:50%;cursor:pointer}
+.icon-btn:active{background:var(--line)}
+.badge{display:inline-block;padding:4px 10px;border-radius:99px;font-size:.78rem;font-weight:700;background:var(--line);color:var(--primary-d)}
+.badge.pending{background:#fef3c7;color:#92400e}.badge.approved,.badge.active{background:#dcfce7;color:#166534}.badge.rejected,.badge.restricted{background:#fee2e2;color:#991b1b}
+.spinner{width:42px;height:42px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--primary);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pulse{width:90px;height:90px;border-radius:50%;margin:10px auto;background:linear-gradient(135deg,var(--primary),var(--accent));animation:pulse 2s ease-in-out infinite;display:grid;place-items:center;font-size:2.4rem}
+@keyframes pulse{0%,100%{transform:scale(.9);opacity:.8}50%{transform:scale(1.08);opacity:1}}
+.steps{padding-left:20px;line-height:1.7;margin:0}
+.checkrow{display:flex;gap:10px;align-items:flex-start;font-weight:400}.checkrow input{width:22px;height:22px;margin-top:2px;accent-color:var(--primary)}
+.waveform{width:100%;height:90px;background:var(--bg);border-radius:14px;border:1px solid var(--line)}
+.timer{font-size:2rem;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+.rec-dot{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--danger);margin-right:8px;animation:pulse 1s infinite}
+audio{width:100%}
+progress{width:100%;height:10px;accent-color:var(--primary)}
+/* toast, sheet */
+.toast{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:#2a2140;color:#fff;padding:12px 18px;border-radius:14px;opacity:0;transition:.3s;z-index:300;max-width:90vw;font-size:.92rem}
+.toast.show{opacity:1;transform:translate(-50%,0)}.toast.err{background:var(--danger)}.toast.good{background:var(--ok)}
+.overlay{position:fixed;inset:0;background:rgba(20,10,40,.5);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:560px;border-radius:24px 24px 0 0;padding:14px 16px 24px;max-height:85dvh;overflow:auto;animation:up .25s}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.list-item{display:flex;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;display:grid;place-items:center;font-weight:800;flex:none;position:relative;object-fit:cover}
+.avatar .dot{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;background:#9ca3af;border:2px solid var(--card)}.avatar .dot.on{background:var(--ok)}
+/* chat */
+.chat{height:100vh;height:100dvh;padding-top:env(safe-area-inset-top);display:flex;flex-direction:column;max-width:700px;margin:0 auto;background:var(--bg)}
+.chat-head{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--card);border-bottom:1px solid var(--line)}
+.chat-head .title{flex:1;min-width:0}.chat-head .title b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+.msg{max-width:82%;align-self:flex-start;display:flex;flex-direction:column;gap:2px}.msg.me{align-self:flex-end}
+.msg .who{font-size:.76rem;font-weight:700;color:var(--accent);padding-left:6px}
+.bubble{background:var(--bubble);padding:8px 12px;border-radius:16px 16px 16px 4px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow-wrap:break-word;white-space:pre-wrap}
+.me .bubble{background:var(--bubble-me);border-radius:16px 16px 4px 16px}
+.bubble img,.bubble video{max-width:100%;border-radius:12px;display:block;max-height:320px}
+.quote{border-left:3px solid var(--accent);padding:2px 8px;margin-bottom:4px;font-size:.82rem;color:var(--muted);background:rgba(139,92,246,.08);border-radius:6px}
+.meta{font-size:.7rem;color:var(--muted);text-align:right;margin-top:2px}.ticks.read{color:#0ea5e9}
+.reacts{display:flex;gap:4px;flex-wrap:wrap}.react{font-size:.8rem;background:var(--card);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.msg-actions{font-size:.75rem;color:var(--primary);cursor:pointer;background:none;border:0;padding:0 6px;align-self:flex-end}
+.composer{display:flex;gap:6px;align-items:flex-end;padding:8px;background:var(--card);border-top:1px solid var(--line)}
+.composer textarea{flex:1;resize:none;max-height:110px;padding:12px 14px;border-radius:22px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
+.send{width:48px;height:48px;border-radius:50%;border:0;color:#fff;font-size:1.2rem;background:linear-gradient(135deg,var(--primary),var(--accent))}
+.replybar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card);border-top:1px solid var(--line);font-size:.85rem}
+.emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;font-size:1.5rem;text-align:center}.emoji-grid span{padding:6px;cursor:pointer;border-radius:10px}.emoji-grid span:active{background:var(--line)}
+/* call */
+.call{position:fixed;inset:0;background:#0f0a1a;z-index:400;color:#fff;display:flex;flex-direction:column}
+.call video.remote{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+.call video.local{position:absolute;right:12px;top:70px;width:100px;height:140px;object-fit:cover;border-radius:14px;border:2px solid #fff;background:#222;z-index:2}
+.call .top{position:relative;z-index:2;padding:16px;text-align:center;background:linear-gradient(#0009,transparent)}
+.call .ctrls{position:absolute;bottom:0;left:0;right:0;z-index:2;display:flex;justify-content:center;gap:14px;padding:20px 12px 32px;background:linear-gradient(transparent,#000a)}
+.call .cbtn{width:60px;height:60px;border-radius:50%;border:0;font-size:1.5rem;background:#ffffff30;color:#fff}.call .cbtn.off{background:#fff;color:#000}.call .cbtn.end{background:var(--danger)}.call .cbtn.acc{background:var(--ok)}
+.call .center-info{position:relative;z-index:1;margin:auto;text-align:center}
+/* admin */
+.admin{padding-bottom:84px;max-width:760px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}.stat b{font-size:1.7rem;display:block;color:var(--primary-d)}.stat span{font-size:.82rem;color:var(--muted)}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.bottom-nav button{flex:1;border:0;background:none;color:var(--muted);padding:9px 2px;font-size:.68rem;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bottom-nav button span{font-size:1.3rem}.bottom-nav button.on{color:var(--primary-d);font-weight:800}
+.chips{display:flex;gap:8px;overflow-x:auto}.chip{border:1.5px solid var(--line);background:var(--card);color:var(--text);border-radius:99px;padding:8px 14px;font:inherit;font-size:.88rem;white-space:nowrap}.chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer}
+.avatar{overflow:hidden}
+
+.banner{background:#f59e0b;color:#111;padding:8px 12px;border-radius:10px;margin-top:8px;font-size:.88rem;font-weight:600}
+.call .obs-grid{position:relative;z-index:1;margin:90px 0 110px;overflow:auto;display:grid;gap:8px;padding:8px;grid-template-columns:1fr 1fr}
+.obs-tile video{width:100%;background:#000;border-radius:12px;max-height:45vh}
+.gallery video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px}
+.bubble video{max-width:100%;border-radius:12px;max-height:320px}
+.call.room .room-grid{position:absolute;inset:0;padding:78px 6px 104px;display:grid;gap:6px;grid-template-columns:repeat(var(--cols,1),1fr);grid-template-rows:repeat(var(--rows,1),1fr);z-index:1}
+.rtile{position:relative;background:#1c1530;border-radius:12px;overflow:hidden;min-height:0}
+.rtile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:transparent}
+.rtile .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:2.4rem;font-weight:800;color:#8b5cf6}
+.rtile .nm{position:absolute;left:6px;bottom:6px;background:#000a;padding:2px 8px;border-radius:8px;font-size:.78rem;z-index:2}
+.call.room .room-grid.duo,.call.room .room-grid.solo{display:block;padding:0}
+.call.room .room-grid.duo .rtile.other,.call.room .room-grid.solo .rtile.me{position:absolute;inset:0;border-radius:0}
+.call.room .room-grid.duo .rtile.me{position:absolute;right:12px;top:100px;width:100px;height:140px;z-index:3;border:2px solid #fff}
+.rooms-list .list-item b{display:block}
+
+.obs-chip{display:inline-block;background:#f59e0b;color:#111;border-radius:99px;padding:2px 10px;font-size:.72rem;font-weight:700;margin-top:6px}
+
+.banner{display:inline-block;padding:3px 10px;font-size:.78rem;border-radius:99px;margin-top:6px}
+.vtile{aspect-ratio:1;display:grid;place-items:center;background:#222;border-radius:10px;font-size:2rem;cursor:pointer}
+
+/* Penampil layar penuh */
+.viewer{position:fixed;inset:0;background:#000;z-index:600;display:flex;flex-direction:column;color:#fff}
+.vw-top{display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(0,0,0,.6)}
+.vw-title{flex:1;text-align:center;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vw-btn{background:rgba(255,255,255,.16);color:#fff;border:0;border-radius:99px;padding:10px 16px;font-size:.95rem;font-weight:700}
+.vw-btn:disabled{opacity:.5}
+.vw-stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:auto}
+.vw-stage img,.vw-stage video{max-width:100%;max-height:100%;object-fit:contain;border-radius:0}
+.vw-note{text-align:center;font-size:.85rem;min-height:1.2em;padding:2px 8px}
+.vw-cap{padding:10px 14px 18px;background:rgba(0,0,0,.6);max-height:35dvh;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.vw-cap .btn{width:100%}
+.obs-tile{cursor:zoom-in}
+/* Gestur pesan */
+.msg{position:relative;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.msg .bubble{-webkit-user-select:text;user-select:text}
+.bubble img,.bubble video{-webkit-touch-callout:none;-webkit-user-drag:none}
+.msg .swipe-ic{position:absolute;left:-34px;top:50%;transform:translateY(-50%);opacity:0;font-size:1.2rem;pointer-events:none}
+.react{cursor:pointer}.react.mine{background:rgba(139,92,246,.18);border-color:var(--primary)}
+.quote{cursor:pointer}
+.msg.flash .bubble{outline:2px solid var(--primary);transition:outline .3s}
+
+/* Member 👑 */
+.bubble.crown{background:linear-gradient(135deg,#fde68a,#f9a8d4 55%,#c4b5fd);color:#2b1250;border:1px solid #f59e0b}
+.bubble.crown .meta,.bubble.crown .quote{color:#4c1d95}
+.me .bubble.crown{border-radius:16px 16px 4px 16px}
+.pinbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);cursor:pointer;font-size:.85rem}
+.pinbar .pin-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+
+/* Penyunting foto/video */
+.editor{z-index:700}
+.ed-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px}
+.ed-stage{position:relative;touch-action:none;user-select:none;-webkit-user-select:none;background:#111}
+.ed-stage canvas,.ed-stage video{display:block;width:100%;height:100%;border-radius:0;max-height:none}
+.crop-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.6);touch-action:none;cursor:move}
+.crop-h{position:absolute;width:30px;height:30px;touch-action:none}
+.crop-h::after{content:"";position:absolute;width:16px;height:16px;border:3px solid #fff}
+.crop-h.tl{left:-8px;top:-8px}.crop-h.tl::after{left:3px;top:3px;border-right:0;border-bottom:0}
+.crop-h.tr{right:-8px;top:-8px}.crop-h.tr::after{right:3px;top:3px;border-left:0;border-bottom:0}
+.crop-h.bl{left:-8px;bottom:-8px}.crop-h.bl::after{left:3px;bottom:3px;border-right:0;border-top:0}
+.crop-h.br{right:-8px;bottom:-8px}.crop-h.br::after{right:3px;bottom:3px;border-left:0;border-top:0}
+.ed-tools{padding:8px 12px 16px;background:rgba(0,0,0,.7);display:flex;flex-direction:column;gap:8px}
+.ed-chips{display:flex;gap:6px;overflow-x:auto;justify-content:center;flex-wrap:wrap}
+.ed-chip{background:rgba(255,255,255,.14);color:#fff;border:1px solid transparent;border-radius:99px;padding:7px 13px;font-size:.85rem;font-weight:700;white-space:nowrap}
+.ed-chip.on{background:var(--primary);border-color:#fff}
+.ed-done{background:var(--primary)}
+.ed-trim{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;font-size:.85rem}
+.ed-trim input{width:100%}
+.ed-info{text-align:center;font-size:.85rem}
+
+.vtile{position:relative;overflow:hidden;background:#222}
+.vtile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;border-radius:0}
+.vtile .vplay{position:relative;z-index:1;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;font-size:1.1rem}
+.vwrap{min-width:200px}
+
+/* Perapian tampilan layar penuh Android */
+.composer{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+.msgs{overscroll-behavior:contain}
+.msg{min-width:0}.msg .who{max-width:100%}
+.row>.grow,.list-item>.grow,.pinbar>.grow,.replybar>.grow{min-width:0}
+.sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.vw-cap,.ed-tools{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+.vw-top{padding-top:calc(10px + env(safe-area-inset-top))}
+</style></head><body class="notranslate"><div id="app"></div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setDoc, runTransaction, deleteField, getDocFromServer, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getDatabase, ref as dRef, onValue, set as dSet, onDisconnect, serverTimestamp as dTs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+/* ---- firebase-config.js ---- */
+// ISI dengan konfigurasi proyek Firebase Anda (Firebase Console > Project settings > Your apps > Web app).
+// Selama masih berisi "ISI_", aplikasi menampilkan petunjuk konfigurasi dan TIDAK mengirim data apa pun.
+const firebaseConfig = {
+  apiKey: "AIzaSyArYb8lwRqdgBIGK0sqIUHx3S6n59g3fLA",
+  authDomain: "planning-with-ai-8fdbc.firebaseapp.com",
+  databaseURL: "https://planning-with-ai-8fdbc-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "planning-with-ai-8fdbc",
+  messagingSenderId: "662265633925",
+  appId: "1:662265633925:web:b984ef6f45ece27e739dec",
+};
+
+// ID grup. Harus sama dengan G() di firestore.rules.
+const GROUP_ID = "sela";
+
+// STUN gratis saja TIDAK cukup untuk semua jaringan (misalnya data seluler tertentu).
+// Tambahkan server TURN (Metered, Twilio, Cloudflare, atau coturn sendiri) agar video call stabil.
+const ICE_SERVERS = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302", "stun:stun.turnix.io:3478"] },
+  // Turnix (EU Central), TURN gratis. Kredensial berlaku sampai 23 Nov 2026 -> setelah itu buat ulang di turnix.io lalu ganti di sini.
+  {
+    urls: [
+      "turn:eu-central.turnix.io:3478?transport=udp",
+      "turn:eu-central.turnix.io:3478?transport=tcp",
+      "turns:eu-central.turnix.io:443?transport=udp",
+      "turns:eu-central.turnix.io:443?transport=tcp",
+    ],
+    username: "9f36e434-fe46-4c13-a05e-f576c017804c",
+    credential: "9b318bdf5d0492fd8981f232a121ce85",
+  },
+  // Cadangan: ExpressTURN (tidak kedaluwarsa). Isi lalu buka komentar:
+  // { urls: ["turn:free.expressturn.com:3478?transport=udp", "turn:free.expressturn.com:3478?transport=tcp"], username: "USERNAME", credential: "PASSWORD" },
+];
+
+// Penyimpanan Storj (bucket "sela-media"). Kunci tulis = hanya Write; kunci baca = hanya Read.
+const STORJ = {
+  endpoint: "https://gateway.storjshare.io", bucket: "sela-media", region: "us-1",
+  write: { ak: "jvzspnifdfpusfb77ubfkbiad6kq", sk: "j3dqxcyebjoeauhl7f4rk737q76tzhowczfqn7jzshnzp4tygxub6" },
+  read: { ak: "jwhovjirp5rv7at4h6wnj7eqhdpa", sk: "j365yq24qghznf4b4vfbd6whomunqr3acf5jxkuwmzfzhfgovs3lw" },
+};
+
+/* ---- core.js ---- */
+
+
+
+
+
+
+const configured = !JSON.stringify(firebaseConfig).includes("ISI_");
+let app, auth, db, rtdb;
+if (configured) {
+  app = initializeApp(firebaseConfig);
+  // Login disimpan permanen di perangkat (tetap masuk setelah aplikasi ditutup) sampai pengguna menekan Keluar.
+  auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence], popupRedirectResolver: browserPopupRedirectResolver });
+  try { navigator.storage?.persist?.(); } catch {}
+  auth.languageCode = "id";
+  db = getFirestore(app);
+  rtdb = getDatabase(app);
+}
+
+/* ---------- DOM helper (aman dari XSS: tidak memakai innerHTML) ---------- */
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat(Infinity)) {
+    if (c == null || c === false) continue;
+    e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return e;
+}
+function mount(root, node) { root.replaceChildren(node); }
+
+function toast(msg, kind = "") {
+  const t = h("div", { class: "toast " + kind }, msg);
+  document.body.append(t);
+  setTimeout(() => t.classList.add("show"), 10);
+  setTimeout(() => { t.classList.remove("show"); setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+/* ---- Tombol kembali Android: menutup lapisan teratas (sheet, penampil, penyunting) sebelum keluar aplikasi ---- */
+const bk = { stack: [], hist: 0, pending: false, armed: false };
+function backSync() {
+  if (bk.pending) return;
+  while (bk.hist < bk.stack.length) { history.pushState({ sela: "o" }, ""); bk.hist++; }
+  if (bk.hist > bk.stack.length) { bk.pending = true; history.back(); }
+}
+function backPush(closeFn) {
+  const e = { closeFn }; bk.stack.push(e); backSync();
+  return () => { const i = bk.stack.indexOf(e); if (i >= 0) { bk.stack.splice(i, 1); backSync(); } };
+}
+try { history.replaceState({ sela: "base" }, ""); history.pushState({ sela: "root" }, ""); } catch {}
+window.addEventListener("popstate", () => {
+  if (bk.pending) { bk.pending = false; bk.hist = Math.max(0, bk.hist - 1); backSync(); return; }
+  if (bk.hist > 0) { bk.hist--; const e = bk.stack.pop(); try { e?.closeFn(); } catch {} backSync(); return; }
+  // Di layar utama: cegah keluar tak sengaja.
+  if (document.querySelector(".call")) { toast("Akhiri panggilan dulu dengan tombol Akhiri."); history.pushState({ sela: "root" }, ""); return; }
+  if (bk.armed) { bk.armed = false; history.back(); return; }
+  bk.armed = true; toast("Tekan kembali sekali lagi untuk keluar"); history.pushState({ sela: "root" }, ""); setTimeout(() => { bk.armed = false; }, 2200);
+});
+
+function openSheet(title, content) {
+  let rel = () => {};
+  const close = () => { ov.remove(); rel(); };
+  const ov = h("div", { class: "overlay", onclick: (e) => { if (e.target === ov) close(); } },
+    h("div", { class: "sheet" },
+      h("div", { class: "sheet-head" }, h("b", {}, title), h("button", { class: "icon-btn", onclick: close, "aria-label": "Tutup" }, "✕")),
+      content));
+  document.body.append(ov);
+  rel = backPush(close);
+  return close;
+}
+
+function fmtTime(ts) {
+  const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+  return d ? d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) : "";
+}
+function fmtDateTime(ts) {
+  const d = ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+  return d ? d.toLocaleString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-";
+}
+function maskPhone(p) {
+  if (!p) return "-";
+  if (p.includes("@")) { const [a, d] = p.split("@"); return a.slice(0, 2) + "•••@" + d; }
+  return p.slice(0, 5) + "•••••" + p.slice(-3);
+}
+
+function friendlyError(e) {
+  const c = e?.code || "";
+  const map = {
+    "auth/invalid-verification-code": "Kode OTP salah. Periksa lagi dan coba kembali.",
+    "auth/code-expired": "Kode OTP sudah kedaluwarsa. Kirim ulang OTP.",
+    "auth/invalid-phone-number": "Format nomor telepon tidak valid. Contoh: +6281234567890.",
+    "auth/too-many-requests": "Terlalu banyak percobaan. Tunggu beberapa saat lalu coba lagi.",
+    "auth/quota-exceeded": "Kuota SMS Firebase habis. Coba lagi nanti atau hubungi admin.",
+    "auth/network-request-failed": "Koneksi internet bermasalah.",
+    "auth/captcha-check-failed": "Verifikasi reCAPTCHA gagal. Muat ulang halaman.",
+    "auth/operation-not-allowed": "Metode login ini belum diaktifkan di Firebase Console.",
+    "auth/popup-closed-by-user": "Jendela login Google ditutup sebelum selesai. Coba lagi.",
+    "auth/cancelled-popup-request": "Login dibatalkan. Coba lagi.",
+    "auth/popup-blocked": "Pop-up login diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.",
+    "auth/unauthorized-domain": "Domain situs ini belum ditambahkan di Firebase (Authentication > Settings > Authorized domains).",
+    "auth/account-exists-with-different-credential": "Akun sudah terdaftar dengan metode lain.",
+    "permission-denied": "Akses ditolak oleh aturan keamanan server.",
+    "unavailable": "Server tidak dapat dihubungi. Periksa koneksi internet.",
+  };
+  return map[c] || map[c.replace("firestore/", "")] || (e?.message ? "Terjadi kesalahan: " + e.message : "Terjadi kesalahan.");
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("sela-theme");
+  const dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+}
+function toggleTheme() {
+  const dark = document.documentElement.dataset.theme !== "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  localStorage.setItem("sela-theme", dark ? "dark" : "light");
+}
+
+function signOutNow() { return signOut(auth); }
+
+function loadingView(text = "Memuat…") {
+  return h("div", { class: "screen center" }, h("div", { class: "spinner" }), h("p", { class: "muted" }, text));
+}
+function errorView(msg) {
+  return h("div", { class: "screen center" },
+    h("div", { class: "card stack" }, h("h2", {}, "Terjadi masalah"), h("p", { class: "error" }, msg),
+      h("button", { class: "btn primary", onclick: () => location.reload() }, "Muat ulang"),
+      h("button", { class: "btn ghost", onclick: () => signOutNow() }, "Keluar")));
+}
+
+function showConfigHelp(root, title) {
+  mount(root, h("div", { class: "screen" }, h("div", { class: "card stack" },
+    h("h1", {}, "⚙️ " + title),
+    h("p", { class: "error" }, "Firebase belum dikonfigurasi. Tidak ada data yang dikirim ke server."),
+    h("ol", { class: "steps" },
+      h("li", {}, "Buka console.firebase.google.com lalu buat proyek."),
+      h("li", {}, "Tambahkan Web App, salin objek firebaseConfig."),
+      h("li", {}, "Tempel ke file public/js/firebase-config.js (ganti semua tulisan ISI_...)."),
+      h("li", {}, "Aktifkan Authentication (Phone), Firestore, dan Realtime Database (Storage tidak diperlukan)."),
+      h("li", {}, "Pasang isi firestore.rules dan database.rules.json."),
+      h("li", {}, "Unggah ulang situs, lalu muat ulang halaman ini.")),
+    h("p", { class: "muted" }, "Panduan lengkap ada di README.md."))));
+}
+
+/* ---------- Login nomor telepon + OTP (dipakai aplikasi anggota dan admin) ---------- */
+function loginView(title = "Sela Group Chat", subtitle = "Masuk dengan nomor telepon") {
+  let confirmation = null, verifier = null, cdTimer = null;
+  const err = h("div", { class: "error", role: "alert" });
+  const rcHost = h("div");
+  const phone = h("input", { class: "input", type: "tel", inputmode: "tel", autocomplete: "tel", placeholder: "+6281234567890", value: "+62" });
+  const otp = h("input", { class: "input otp", type: "text", inputmode: "numeric", maxlength: "6", autocomplete: "one-time-code", placeholder: "••••••" });
+  const sendBtn = h("button", { class: "btn primary", onclick: send }, "Kirim OTP");
+  const verBtn = h("button", { class: "btn primary", onclick: verify }, "Verifikasi");
+  const resend = h("button", { class: "btn ghost", onclick: send, disabled: true }, "Kirim ulang OTP");
+  const otpBox = h("div", { class: "stack hidden" }, h("label", {}, "Kode OTP (6 digit)"), otp, verBtn, resend);
+
+  function busy(btn, on, text) {
+    btn.disabled = on;
+    if (on) { btn.dataset.t = btn.textContent; btn.textContent = text; } else if (btn.dataset.t) btn.textContent = btn.dataset.t;
+  }
+  function countdown() {
+    let s = 60; resend.disabled = true; clearInterval(cdTimer);
+    cdTimer = setInterval(() => {
+      s--; resend.textContent = s > 0 ? `Kirim ulang OTP (${s}s)` : "Kirim ulang OTP";
+      if (s <= 0) { clearInterval(cdTimer); resend.disabled = false; }
+    }, 1000);
+  }
+  async function send() {
+    err.textContent = "";
+    const p = phone.value.replace(/[\s-]/g, "");
+    if (!/^\+[1-9]\d{7,14}$/.test(p)) { err.textContent = "Gunakan kode negara, contoh +6281234567890."; return; }
+    busy(sendBtn, true, "Mengirim…");
+    try {
+      try { verifier?.clear(); } catch {}
+      const holder = h("div"); rcHost.replaceChildren(holder);
+      verifier = new RecaptchaVerifier(auth, holder, { size: "invisible" });
+      confirmation = await signInWithPhoneNumber(auth, p, verifier);
+      otpBox.classList.remove("hidden"); otp.focus(); countdown();
+    } catch (e) { err.textContent = friendlyError(e); confirmation = null; }
+    finally { busy(sendBtn, false); }
+  }
+  async function verify() {
+    err.textContent = "";
+    if (!confirmation) { err.textContent = "Kirim OTP terlebih dahulu."; return; }
+    if (!/^\d{6}$/.test(otp.value.trim())) { err.textContent = "Masukkan 6 digit kode OTP."; return; }
+    busy(verBtn, true, "Memverifikasi…");
+    try { await confirmation.confirm(otp.value.trim()); }
+    catch (e) { err.textContent = friendlyError(e); busy(verBtn, false); }
+  }
+  return h("div", { class: "screen center" }, h("div", { class: "card stack login" },
+    h("div", { class: "logo" }, "S"), h("h1", {}, title), h("p", { class: "muted" }, subtitle),
+    h("label", {}, "Nomor telepon (dengan kode negara)"), phone, sendBtn, otpBox, err, rcHost,
+    h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
+}
+
+/* ---------- Login Google (aplikasi anggota) ---------- */
+function googleLoginView(title = "Sela Group Chat", subtitle = "Masuk dengan akun Google") {
+  const err = h("div", { class: "error", role: "alert" });
+  const btn = h("button", { class: "btn primary" }, "Masuk dengan Google");
+  btn.onclick = async () => {
+    err.textContent = ""; btn.disabled = true; btn.textContent = "Membuka Google…";
+    try {
+      const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: "select_account" });
+      await signInWithPopup(auth, prov);
+    } catch (e) { err.textContent = friendlyError(e); btn.disabled = false; btn.textContent = "Masuk dengan Google"; }
+  };
+  return h("div", { class: "screen center" }, h("div", { class: "card stack login" },
+    h("div", { class: "logo" }, "S"), h("h1", {}, title), h("p", { class: "muted" }, subtitle),
+    btn, err,
+    h("p", { class: "muted small" }, "Buka lewat Chrome (bukan browser di dalam WhatsApp atau aplikasi lain) agar login Google berfungsi."),
+    h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
+}
+
+/* ---------- Tanpa Firebase Storage: file kecil disimpan sebagai data URL di Firestore ---------- */
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error("Gagal membaca file."));
+    r.readAsDataURL(blob);
+  });
+}
+async function compressImage(file, maxDim = 800, q = 0.6, maxChars = 220000) {
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) throw new Error("Foto tidak dapat dibaca.");
+  const sc = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(bmp.width * sc)); c.height = Math.max(1, Math.round(bmp.height * sc));
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  for (let qq = q; qq >= 0.29; qq -= 0.1) { const d = c.toDataURL("image/jpeg", qq); if (d.length <= maxChars) return d; }
+  throw new Error("Foto terlalu besar setelah dikompres.");
+}
+
+/* Cermin: pratinjau kamera depan dicerminkan seperti cermin (hasil yang dikirim/dilihat orang lain tetap normal). */
+const mirrorOn = () => { try { return localStorage.getItem("sela-mirror") !== "off"; } catch { return true; } };
+function setMirror(on) { try { localStorage.setItem("sela-mirror", on ? "on" : "off"); } catch {} }
+function applyMirror(v, facing) { if (v) v.style.transform = facing === "user" && mirrorOn() ? "scaleX(-1)" : ""; }
+
+/* ---- storj.js ---- */
+
+
+/*
+ * Penyimpanan foto/video di Storj (S3). Penandatanganan SigV4 dilakukan di browser.
+ *  - uploadMedia: memakai kunci TULIS (hanya Write ke bucket sela-media).
+ *  - loadMedia  : memakai kunci BACA (hanya Read). Nama file acak panjang dan tidak bisa didaftar.
+ *  - deleteMedia: memakai kunci ADMIN yang ditempel sendiri oleh admin (tidak ada di kode).
+ */
+const sjEnc = new TextEncoder();
+const sjHex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+const sjSha = async (d) => sjHex(await crypto.subtle.digest("SHA-256", d instanceof ArrayBuffer ? d : sjEnc.encode(d)));
+async function sjHmac(key, msg) {
+  const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, sjEnc.encode(msg)));
+}
+async function sjFetch(method, key, creds, body, contentType) {
+  const host = new URL(STORJ.endpoint).host;
+  const amz = new Date().toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const date = amz.slice(0, 8);
+  const buf = body ? await body.arrayBuffer() : null;
+  const payload = await sjSha(buf || "");
+  const path = "/" + STORJ.bucket + "/" + key;
+  const hd = { "x-amz-content-sha256": payload, "x-amz-date": amz };
+  let canonH = "", names = [];
+  if (contentType) { hd["Content-Type"] = contentType; canonH += `content-type:${contentType}\n`; names.push("content-type"); }
+  canonH += `host:${host}\nx-amz-content-sha256:${payload}\nx-amz-date:${amz}\n`; names.push("host", "x-amz-content-sha256", "x-amz-date");
+  const canon = [method, path, "", canonH, names.join(";"), payload].join("\n");
+  const scope = `${date}/${STORJ.region}/s3/aws4_request`;
+  const sts = ["AWS4-HMAC-SHA256", amz, scope, await sjSha(canon)].join("\n");
+  let k = await sjHmac(sjEnc.encode("AWS4" + creds.sk), date);
+  k = await sjHmac(k, STORJ.region); k = await sjHmac(k, "s3"); k = await sjHmac(k, "aws4_request");
+  hd.Authorization = `AWS4-HMAC-SHA256 Credential=${creds.ak}/${scope}, SignedHeaders=${names.join(";")}, Signature=${sjHex(await sjHmac(k, sts))}`;
+  return fetch(STORJ.endpoint + path, { method, headers: hd, body: buf || undefined });
+}
+
+const SJ_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "video/webm": "webm", "video/mp4": "mp4", "video/quicktime": "mov" };
+async function uploadMedia(blob, mime) {
+  const mt = (mime || blob.type || "application/octet-stream").split(";")[0];
+  const ext = SJ_EXT[mt] || "bin";
+  const rnd = crypto.getRandomValues(new Uint8Array(12));
+  const key = "m/" + sjHex(rnd) + "." + ext;
+  const r = await sjFetch("PUT", key, STORJ.write, blob, mt);
+  if (!r.ok) throw new Error("Unggah ke penyimpanan gagal (" + r.status + ").");
+  return { key, mime: mt, size: blob.size };
+}
+
+const sjCache = new Map();
+function loadMedia(key, mime) {
+  if (!sjCache.has(key)) {
+    sjCache.set(key, (async () => {
+      const r = await sjFetch("GET", key, STORJ.read);
+      if (!r.ok) throw new Error("Gagal memuat media (" + r.status + ").");
+      const b = await r.blob();
+      return URL.createObjectURL(mime ? new Blob([b], { type: mime }) : b);
+    })().catch((e) => { sjCache.delete(key); throw e; }));
+  }
+  return sjCache.get(key);
+}
+
+function sjAdminKey() {
+  try { const s = JSON.parse(localStorage.getItem("sela-storj-admin") || "null"); if (s?.ak && s?.sk) return s; } catch {}
+  const ak = (prompt("Tempel Access Key ADMIN Storj (hanya admin, tersimpan di HP ini):") || "").trim();
+  const sk = ak ? (prompt("Tempel Secret Key ADMIN Storj:") || "").trim() : "";
+  if (!ak || !sk) return null;
+  try { localStorage.setItem("sela-storj-admin", JSON.stringify({ ak, sk })); } catch {}
+  return { ak, sk };
+}
+function forgetAdminKey() { try { localStorage.removeItem("sela-storj-admin"); } catch {} }
+async function deleteMedia(key) {
+  const c = sjAdminKey(); if (!c) throw new Error("Kunci admin Storj belum diisi.");
+  const r = await sjFetch("DELETE", key, c);
+  if (!r.ok && r.status !== 404) { if (r.status === 403) forgetAdminKey(); throw new Error("Hapus file gagal (" + r.status + ")."); }
+}
+
+// Elemen tampilan media untuk satu pesan (data lama di Firestore maupun file di Storj).
+// Foto dan video langsung tampil (dimuat saat mendekati layar). Elemen di-cache supaya video tidak berhenti saat daftar pesan digambar ulang.
+const sjEls = new Map();
+function sjLazy(el, fn) {
+  if (!("IntersectionObserver" in window)) { fn(); return; }
+  const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { io.disconnect(); fn(); } }, { rootMargin: "400px" });
+  io.observe(el);
+}
+function mediaEl(m, o = {}) {
+  const open = o.onOpen;
+  if (m.imageData) return h("img", { src: m.imageData, loading: "lazy", alt: "Foto", onclick: open });
+  if (m.videoData) return h("video", { src: m.videoData, controls: !o.tile, muted: !!o.tile, preload: "metadata", playsinline: true, onclick: o.tile ? open : null });
+  if (!m.mediaKey) return null;
+  const ck = o.auto ? null : m.mediaKey + (o.tile ? "|t" : "|f");
+  if (ck && sjEls.has(ck)) return sjEls.get(ck);
+  const el = sjBuild(m, o, ck);
+  if (ck && el) sjEls.set(ck, el);
+  return el;
+}
+function sjBuild(m, o, ck) {
+  const open = o.onOpen;
+  const isVid = m.messageType === "video" || String(m.mime || "").startsWith("video/");
+  if (!isVid) {
+    const im = h("img", { alt: "Foto", onclick: open });
+    loadMedia(m.mediaKey, m.mime).then((u) => { im.src = u; }).catch(() => { if (ck) sjEls.delete(ck); im.replaceWith(h("div", { class: "muted small" }, "⚠ Foto gagal dimuat")); });
+    return im;
+  }
+  const mb = m.size ? " (" + (m.size / 1048576).toFixed(1) + " MB)" : "";
+  if (o.tile) {
+    const t = h("div", { class: "vtile", onclick: open }, h("span", { class: "vplay" }, "▶"));
+    sjLazy(t, async () => {
+      try { const u = await loadMedia(m.mediaKey, m.mime); const v = h("video", { src: u, muted: true, preload: "metadata", playsinline: true }); v.muted = true; v.addEventListener("loadedmetadata", () => { try { v.currentTime = 0.1; } catch {} }); t.prepend(v); }
+      catch { t.append(h("span", { class: "muted small" }, "⚠")); }
+    });
+    return t;
+  }
+  const holder = h("div", { class: "vwrap" }, h("div", { class: "muted small" }, "Memuat video" + mb + "…"));
+  const load = async () => {
+    holder.replaceChildren(h("div", { class: "muted small" }, "Memuat video" + mb + "…"));
+    try {
+      const u = await loadMedia(m.mediaKey, m.mime);
+      const v = h("video", { src: u, controls: true, playsinline: true, preload: "metadata", style: "width:100%;border-radius:12px;max-height:340px;background:#000" });
+      if (o.auto) v.autoplay = true; else v.addEventListener("loadedmetadata", () => { try { v.currentTime = 0.1; } catch {} }, { once: true });
+      holder.replaceChildren(v);
+    } catch { holder.replaceChildren(h("button", { class: "btn ghost small", onclick: load }, "⚠ Gagal memuat. Coba lagi")); }
+  };
+  if (o.auto) load(); else sjLazy(holder, load);
+  return holder;
+}
+
+// ---- Simpan / lihat media ----
+async function mediaURL(m) {
+  if (m.imageData) return m.imageData;
+  if (m.videoData) return m.videoData;
+  if (m.mediaKey) return loadMedia(m.mediaKey, m.mime);
+  throw new Error("Tidak ada media.");
+}
+function extOf(m, blob) {
+  const t = String(m.mime || blob?.type || "");
+  if (t.includes("png")) return "png"; if (t.includes("webp")) return "webp";
+  if (t.startsWith("video/")) return t.includes("mp4") ? "mp4" : "webm";
+  return "jpg";
+}
+async function saveMedia(m) {
+  const u = await mediaURL(m);
+  const blob = await (await fetch(u)).blob();
+  const name = "sela-" + Date.now() + "." + extOf(m, blob);
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return name;
+}
+// Penampil layar penuh (seperti WhatsApp): tombol tutup, simpan, dan konten tambahan opsional.
+function openViewer(m, o = {}) {
+  const note = h("div", { class: "vw-note" });
+  let rel = () => {};
+  const close = () => { try { stage.querySelector("video")?.pause(); } catch {} ov.remove(); document.removeEventListener("keydown", onKey); rel(); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const save = h("button", { class: "vw-btn", onclick: async () => {
+    save.disabled = true; note.textContent = "Menyimpan…";
+    try { await saveMedia(m); note.textContent = "✓ Tersimpan ke unduhan"; } catch (e) { note.textContent = "⚠ Gagal menyimpan: " + (e.message || e); }
+    save.disabled = false; setTimeout(() => { note.textContent = ""; }, 3500);
+  } }, "💾 Simpan");
+  const stage = h("div", { class: "vw-stage" });
+  const ov = h("div", { class: "viewer" },
+    h("div", { class: "vw-top" }, h("button", { class: "vw-btn", onclick: close }, "✕ Tutup"), h("div", { class: "vw-title" }, o.title || ""), save),
+    stage, note,
+    (m.text || o.extra) ? h("div", { class: "vw-cap" }, m.text ? h("p", {}, m.text) : null, o.sub ? h("div", { class: "muted small" }, o.sub) : null, o.extra || null) : null);
+  document.body.append(ov); document.addEventListener("keydown", onKey); rel = backPush(close);
+  const isVid = !!m.videoData || m.messageType === "video" || String(m.mime || "").startsWith("video/");
+  stage.append(h("div", { class: "muted" }, "Memuat…"));
+  mediaURL(m).then((u) => {
+    stage.replaceChildren(isVid ? h("video", { src: u, controls: true, autoplay: true, playsinline: true }) : h("img", { src: u, alt: "Foto" }));
+  }).catch((e) => { stage.replaceChildren(h("div", { class: "muted" }, "⚠ " + (e.message || "Gagal memuat"))); });
+  return close;
+}
+// Perbesar satu video (pantauan) ke layar penuh dengan tombol tutup; video dipindah, bukan dibuat ulang.
+function enlargeVideo(v, label) {
+  const home = v.parentNode, next = v.nextSibling;
+  let rel = () => {};
+  const back = () => { ov.remove(); rel(); if (home) home.insertBefore(v, next && next.parentNode === home ? next : null); v.play?.().catch(() => {}); };
+  const ov = h("div", { class: "viewer" }, h("div", { class: "vw-top" }, h("button", { class: "vw-btn", onclick: back }, "✕ Perkecil"), h("div", { class: "vw-title" }, label || "")), h("div", { class: "vw-stage" }));
+  ov.querySelector(".vw-stage").append(v); document.body.append(ov); rel = backPush(back); v.play?.().catch(() => {});
+  return back;
+}
+
+/* ---- editor.js ---- */
+
+/* ===== Penyunting foto & video sebelum dikirim (pangkas, crop, putar, bisukan) ===== */
+
+const edClamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const edFmt = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ":" + (s - m * 60).toFixed(1).padStart(4, "0"); };
+
+// Kotak crop yang bisa digeser dan ditarik sudutnya, di atas elemen "stage" berukuran tepat sama dengan media.
+function edCropWidget(stage) {
+  const handles = ["tl", "tr", "bl", "br"].map((k) => h("div", { class: "crop-h " + k, "data-h": k }));
+  const box = h("div", { class: "crop-box" }, ...handles);
+  stage.append(box);
+  let W = 1, H = 1, ratio = 0, rect = { x: 0, y: 0, w: 1, h: 1 }, drag = null;
+  const paint = () => { box.style.left = rect.x + "px"; box.style.top = rect.y + "px"; box.style.width = rect.w + "px"; box.style.height = rect.h + "px"; };
+  const full = () => { rect = { x: 0, y: 0, w: W, h: H }; };
+  const fit = () => {
+    if (!ratio) { full(); return; }
+    let w = W, hh = W / ratio; if (hh > H) { hh = H; w = H * ratio; }
+    rect = { x: (W - w) / 2, y: (H - hh) / 2, w, h: hh };
+  };
+  const api = {
+    layout() { W = stage.clientWidth || 1; H = stage.clientHeight || 1; fit(); paint(); },
+    setAspect(r) { ratio = r || 0; fit(); paint(); },
+    reset() { ratio = 0; full(); paint(); },
+    get() { return { x: rect.x / W, y: rect.y / H, w: rect.w / W, h: rect.h / H }; },
+    isFull() { return rect.w >= W - 1 && rect.h >= H - 1; },
+  };
+  const pos = (e) => { const b = stage.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  box.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); const p = pos(e); const hk = e.target.dataset?.h || null;
+    try { box.setPointerCapture(e.pointerId); } catch {}
+    if (hk) {
+      const ax = hk.includes("l") ? rect.x + rect.w : rect.x, ay = hk.includes("t") ? rect.y + rect.h : rect.y;
+      drag = { mode: "size", ax, ay };
+    } else drag = { mode: "move", px: p.x, py: p.y, r0: { ...rect } };
+  });
+  box.addEventListener("pointermove", (e) => {
+    if (!drag) return; const p = pos(e);
+    if (drag.mode === "move") {
+      rect.x = edClamp(drag.r0.x + p.x - drag.px, 0, W - rect.w); rect.y = edClamp(drag.r0.y + p.y - drag.py, 0, H - rect.h); paint(); return;
+    }
+    const { ax, ay } = drag; const px = edClamp(p.x, 0, W), py = edClamp(p.y, 0, H);
+    const sx = px >= ax ? 1 : -1, sy = py >= ay ? 1 : -1;
+    let w = Math.abs(px - ax), hh = Math.abs(py - ay);
+    if (ratio) {
+      hh = w / ratio;
+      const maxH = sy > 0 ? H - ay : ay; if (hh > maxH) { hh = maxH; w = hh * ratio; }
+      const maxW = sx > 0 ? W - ax : ax; if (w > maxW) { w = maxW; hh = w / ratio; }
+    }
+    const minS = 48; if (w < minS) { w = minS; if (ratio) hh = w / ratio; } if (hh < minS) { hh = minS; if (ratio) w = hh * ratio; }
+    rect = { x: sx > 0 ? ax : ax - w, y: sy > 0 ? ay : ay - hh, w, h: hh };
+    rect.x = edClamp(rect.x, 0, W - rect.w); rect.y = edClamp(rect.y, 0, H - rect.h); paint();
+  });
+  const up = () => { drag = null; };
+  box.addEventListener("pointerup", up); box.addEventListener("pointercancel", up);
+  return api;
+}
+
+const ED_ASPECTS = [["Bebas", 0], ["Asli", -1], ["1:1", 1], ["4:3", 4 / 3], ["3:4", 3 / 4], ["16:9", 16 / 9], ["9:16", 9 / 16]];
+
+function edShell(title, doneLabel) {
+  const area = h("div", { class: "ed-area" });
+  const tools = h("div", { class: "ed-tools" });
+  const cancel = h("button", { class: "vw-btn" }, "✕ Batal");
+  const done = h("button", { class: "vw-btn ed-done" }, doneLabel);
+  const ov = h("div", { class: "viewer editor" }, h("div", { class: "vw-top" }, cancel, h("div", { class: "vw-title" }, title), done), area, tools);
+  document.body.append(ov);
+  const rel = backPush(() => cancel.click());
+  return { ov, area, tools, cancel, done, rel };
+}
+function edAspectRow(crop, getNatural, onPick) {
+  const row = h("div", { class: "ed-chips" });
+  ED_ASPECTS.forEach(([label, r]) => {
+    const b = h("button", { class: "ed-chip" + (r === 0 ? " on" : ""), onclick: () => {
+      row.querySelectorAll(".ed-chip").forEach((x) => x.classList.remove("on")); b.classList.add("on");
+      if (r === 0) crop.reset(); else crop.setAspect(r === -1 ? getNatural() : r);
+      onPick?.();
+    } }, label);
+    row.append(b);
+  });
+  return row;
+}
+// Menghitung ukuran tampil media agar muat di area.
+function edFitSize(area, w, h0) {
+  const aw = Math.max(50, area.clientWidth - 16), ah = Math.max(50, area.clientHeight - 16);
+  const s = Math.min(aw / w, ah / h0); return { w: Math.round(w * s), h: Math.round(h0 * s) };
+}
+
+/* ---------- FOTO: crop + putar. Mengembalikan File JPEG, atau null jika dibatalkan. ---------- */
+async function editImage(file) {
+  let bmp; try { bmp = await createImageBitmap(file); } catch { throw new Error("Foto tidak dapat dibaca."); }
+  const mk = (w, hh) => { const c = document.createElement("canvas"); c.width = w; c.height = hh; return c; };
+  const k0 = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  let src = mk(Math.max(1, Math.round(bmp.width * k0)), Math.max(1, Math.round(bmp.height * k0)));
+  src.getContext("2d").drawImage(bmp, 0, 0, src.width, src.height);
+  return new Promise((resolve) => {
+    const { ov, area, tools, cancel, done, rel } = edShell("Sunting foto", "Lanjut ➜");
+    const view = document.createElement("canvas");
+    const stage = h("div", { class: "ed-stage" }, view); area.append(stage);
+    const crop = edCropWidget(stage);
+    const layout = () => {
+      const s = edFitSize(area, src.width, src.height);
+      view.width = s.w; view.height = s.h; stage.style.width = s.w + "px"; stage.style.height = s.h + "px";
+      view.getContext("2d").drawImage(src, 0, 0, s.w, s.h); crop.layout();
+    };
+    const chips = edAspectRow(crop, () => src.width / src.height);
+    const rot = h("button", { class: "ed-chip", onclick: () => {
+      const r = mk(src.height, src.width), g = r.getContext("2d"); g.translate(r.width / 2, r.height / 2); g.rotate(Math.PI / 2); g.drawImage(src, -src.width / 2, -src.height / 2);
+      src = r; chips.querySelectorAll(".ed-chip").forEach((x, i) => x.classList.toggle("on", i === 0)); layout();
+    } }, "⟳ Putar");
+    let hd = false;
+    const hdBtn = h("button", { class: "ed-chip", onclick: () => { hd = !hd; hdBtn.classList.toggle("on", hd); hdBtn.textContent = hd ? "✓ Kirim HD" : "Kirim HD"; } }, "Kirim HD");
+    tools.append(chips, h("div", { class: "ed-chips" }, rot, hdBtn), h("p", { class: "muted small", style: "text-align:center" }, "Geser kotak atau tarik sudutnya untuk memotong."));
+    const end = (v) => { window.removeEventListener("resize", layout); ov.remove(); rel(); resolve(v); };
+    cancel.onclick = () => end(null);
+    done.onclick = async () => {
+      const c = crop.get(); const sw = Math.max(1, Math.round(c.w * src.width)), sh = Math.max(1, Math.round(c.h * src.height));
+      const k = Math.min(1, (hd ? 3000 : 1600) / Math.max(sw, sh)); const out = mk(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
+      out.getContext("2d").drawImage(src, Math.round(c.x * src.width), Math.round(c.y * src.height), sw, sh, 0, 0, out.width, out.height);
+      out.toBlob((b) => { if (!b) return end(file); const f = new File([b], "foto.jpg", { type: "image/jpeg" }); f.hd = hd; end(f); }, "image/jpeg", hd ? 0.95 : 0.88);
+    };
+    window.addEventListener("resize", layout);
+    requestAnimationFrame(() => requestAnimationFrame(layout));
+  });
+}
+
+/* ---------- VIDEO: pangkas, bisukan, crop. Mengembalikan {start,end,mute,crop,changed} atau null. ---------- */
+async function editVideo(file, MAX = 90) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement("video"); v.src = url; v.playsInline = true; v.preload = "auto"; v.controls = false;
+  try { await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error("Video tidak dapat dibaca di browser ini.")); }); }
+  catch (e) { URL.revokeObjectURL(url); throw e; }
+  const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+  let start = 0, end = dur ? Math.min(dur, MAX) : 0, mute = false, hd = false;
+  return new Promise((resolve) => {
+    const { ov, area, tools, cancel, done, rel } = edShell("Sunting video", "Lanjut ➜");
+    const stage = h("div", { class: "ed-stage" }, v); area.append(stage);
+    const crop = edCropWidget(stage);
+    const layout = () => { const s = edFitSize(area, v.videoWidth || 16, v.videoHeight || 9); stage.style.width = s.w + "px"; stage.style.height = s.h + "px"; v.style.width = "100%"; v.style.height = "100%"; crop.layout(); };
+    const chips = edAspectRow(crop, () => (v.videoWidth || 1) / (v.videoHeight || 1));
+    const info = h("div", { class: "ed-info" });
+    const sS = h("input", { type: "range", min: "0", max: String(dur || 1), step: "0.1", value: "0" });
+    const sE = h("input", { type: "range", min: "0", max: String(dur || 1), step: "0.1", value: String(end) });
+    const paintInfo = () => { info.textContent = dur ? `Potong: ${edFmt(start)} → ${edFmt(end)}  ·  durasi ${(end - start).toFixed(1)} dtk` : "Durasi video tidak terbaca, tidak bisa dipangkas."; };
+    const playBtn = h("button", { class: "ed-chip", onclick: () => { if (v.paused) { if (v.currentTime < start || v.currentTime >= end - 0.05) v.currentTime = start; v.play().catch(() => {}); } else v.pause(); } }, "▶ Putar");
+    v.addEventListener("play", () => { playBtn.textContent = "⏸ Jeda"; }); v.addEventListener("pause", () => { playBtn.textContent = "▶ Putar"; });
+    v.addEventListener("timeupdate", () => { if (dur && v.currentTime >= end) { v.pause(); v.currentTime = start; } });
+    const muteBtn = h("button", { class: "ed-chip", onclick: () => { mute = !mute; v.muted = mute; muteBtn.textContent = mute ? "🔇 Audio mati" : "🔊 Audio nyala"; muteBtn.classList.toggle("on", mute); } }, "🔊 Audio nyala");
+    const hdBtn = h("button", { class: "ed-chip", onclick: () => { hd = !hd; hdBtn.classList.toggle("on", hd); hdBtn.textContent = hd ? "✓ Kirim HD" : "Kirim HD"; } }, "Kirim HD");
+    if (dur) {
+      sS.oninput = () => { start = Number(sS.value); if (start > end - 0.5) { start = Math.max(0, end - 0.5); sS.value = String(start); } if (end - start > MAX) { end = start + MAX; sE.value = String(end); } v.pause(); v.currentTime = start; paintInfo(); };
+      sE.oninput = () => { end = Number(sE.value); if (end < start + 0.5) { end = Math.min(dur, start + 0.5); sE.value = String(end); } if (end - start > MAX) { start = end - MAX; sS.value = String(start); } v.pause(); v.currentTime = Math.max(start, end - 0.1); paintInfo(); };
+    } else { sS.disabled = true; sE.disabled = true; }
+    paintInfo();
+    tools.append(
+      h("div", { class: "ed-trim" }, h("label", {}, "Mulai"), sS, h("label", {}, "Selesai"), sE), info,
+      h("div", { class: "ed-chips" }, playBtn, muteBtn, hdBtn), chips,
+      h("p", { class: "muted small", style: "text-align:center" }, `Maks. ${MAX} detik. Geser kotak atau tarik sudutnya untuk crop.`));
+    const end2 = (val) => { window.removeEventListener("resize", layout); try { v.pause(); } catch {} ov.remove(); rel(); URL.revokeObjectURL(url); resolve(val); };
+    cancel.onclick = () => end2(null);
+    done.onclick = () => {
+      const c = crop.get();
+      end2({ start, end: dur ? end : 0, mute, hd, crop: c, changed: mute || !crop.isFull() || (dur ? start > 0.05 || end < dur - 0.05 : false) });
+    };
+    v.addEventListener("loadeddata", () => { layout(); v.currentTime = 0.01; }, { once: true });
+    requestAnimationFrame(() => requestAnimationFrame(layout));
+  });
+}
+
+/* Proses video sesuai hasil editVideo (pangkas + crop + bisu). Mengembalikan Blob, atau null jika dibatalkan. */
+async function processVideo(file, o, setProg, cancelled) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement("video"); v.src = url; v.playsInline = true; v.preload = "auto"; v.muted = !!o.mute;
+  let ctx, timer, rec;
+  const cleanup = () => { clearInterval(timer); try { ctx?.close(); } catch {} try { v.pause(); } catch {} URL.revokeObjectURL(url); };
+  try {
+    await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error("Video tidak dapat dibaca di browser ini.")); });
+    const total = isFinite(v.duration) ? v.duration : 90;
+    const start = o.start || 0, end = Math.min(o.end || total, start + 90, total);
+    const cr = o.crop || { x: 0, y: 0, w: 1, h: 1 };
+    const sx = Math.round(cr.x * v.videoWidth), sy = Math.round(cr.y * v.videoHeight);
+    const sw = Math.max(2, Math.round(cr.w * v.videoWidth)), sh = Math.max(2, Math.round(cr.h * v.videoHeight));
+    const HD = !!o.hd; const k = Math.min(1, (HD ? 1280 : 480) / Math.max(sw, sh));
+    const c = document.createElement("canvas"); c.width = Math.max(2, Math.round(sw * k / 2) * 2); c.height = Math.max(2, Math.round(sh * k / 2) * 2);
+    const g = c.getContext("2d");
+    if (start > 0) { await new Promise((res) => { v.onseeked = res; v.currentTime = start; }); }
+    g.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    const out = c.captureStream(HD ? 30 : 15);
+    if (!o.mute) {
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); await ctx.resume(); const dest = ctx.createMediaStreamDestination(); ctx.createMediaElementSource(v).connect(dest); dest.stream.getAudioTracks().forEach((t) => out.addTrack(t)); } catch {}
+    }
+    const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
+    rec = new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: HD ? 2500000 : 300000, audioBitsPerSecond: HD ? 96000 : 32000 });
+    const chunks = []; rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const done = new Promise((res) => (rec.onstop = res));
+    rec.start(); await v.play();
+    timer = setInterval(() => {
+      g.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      setProg?.(Math.min(100, Math.round(((v.currentTime - start) / Math.max(0.1, end - start)) * 100)));
+      if (cancelled?.() || v.currentTime >= end || v.ended) { clearInterval(timer); try { rec.state === "recording" && rec.stop(); } catch {} }
+    }, HD ? 33 : 66);
+    await done; cleanup();
+    if (cancelled?.()) return null;
+    return new Blob(chunks, { type: rec.mimeType || "video/webm" });
+  } catch (e) { cleanup(); throw e; }
+}
+
+/* ---- call.js ---- */
+
+
+/*
+ * Panggilan video 1-lawan-1 dengan WebRTC. Signaling lewat Firestore:
+ *   calls/{id}  -> offer, answer, status (ringing|accepted|rejected|ended|missed)
+ *   calls/{id}/callerCandidates, calls/{id}/receiverCandidates -> ICE candidates
+ * Tanpa server TURN, panggilan bisa gagal pada sebagian jaringan seluler/NAT ketat.
+ */
+class CallManager {
+  constructor({ db, uid, groupId, nameOf, root }) {
+    Object.assign(this, { db, uid, groupId, nameOf, root });
+    this.pc = null; this.local = null; this.ui = null; this.unsubs = []; this.callId = null;
+    this.facing = "user"; this.ended = false; this.video = true; this.ringTimer = null; this.discTimer = null;
+  }
+
+  listenIncoming() {
+    const q = query(collection(this.db, "calls"), where("receiverUid", "==", this.uid), where("status", "==", "ringing"));
+    const un = onSnapshot(q, (snap) => {
+      snap.docChanges().forEach((c) => {
+        if (c.type !== "added") return;
+        const d = c.doc.data();
+        const created = d.createdAt?.toMillis?.() ?? Date.now();
+        if (Date.now() - created > 60000) return; // panggilan lama diabaikan
+        if (this.callId) { updateDoc(c.doc.ref, { status: "rejected", endedAt: serverTimestamp() }).catch(() => {}); return; } // sedang sibuk
+        this.showIncoming(c.doc.id, d);
+      });
+    }, () => {});
+    this.unsubs.push(un);
+    return un;
+  }
+
+  destroy() { this.cleanup(); this.unsubs.forEach((f) => { try { f(); } catch {} }); this.unsubs = []; }
+
+  /* ---------- UI ---------- */
+  buildUI(title, withVideo) {
+    this.closeUI();
+    const remote = h("video", { class: "remote", autoplay: true, playsinline: true });
+    const local = h("video", { class: "local", autoplay: true, playsinline: true, muted: true });
+    local.muted = true;
+    const status = h("div", {}, "Menghubungkan…");
+    const banner = h("div", { class: "banner hidden" });
+    const chip = h("div", { class: "obs-chip hidden" }, "👁 Dipantau admin");
+    const ctrls = h("div", { class: "ctrls" });
+    const el = h("div", { class: "call" }, remote, withVideo ? local : null, h("div", { class: "top" }, h("b", {}, title), status, banner, chip), ctrls);
+    this.root.append(el);
+    this.ui = { el, remote, local, status, ctrls, banner, chip };
+    return this.ui;
+  }
+  paintMirror() { if (this.ui?.local) applyMirror(this.ui.local, this.facing); }
+  closeUI() { this.ui?.el.remove(); this.ui = null; }
+  setChip(on) { const c = this.ui?.chip; if (c) c.classList.toggle("hidden", !on); }
+  setBanner(t, ms) {
+    const b = this.ui?.banner; if (!b) return;
+    b.textContent = t || ""; b.classList.toggle("hidden", !t);
+    if (ms) setTimeout(() => { if (b.textContent === t) { b.textContent = ""; b.classList.add("hidden"); } }, ms);
+  }
+  setStatus(t) { if (this.ui) this.ui.status.textContent = t; }
+
+  controls(withVideo) {
+    const { ctrls } = this.ui;
+    const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
+    const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
+    const flip = h("button", { class: "cbtn", "aria-label": "Balik kamera" }, "🔄");
+    const end = h("button", { class: "cbtn end", "aria-label": "Akhiri" }, "📵");
+    mic.onclick = () => { const t = this.local?.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
+    cam.onclick = () => { const t = this.local?.getVideoTracks()[0]; if (!t) return; t.enabled = !t.enabled; cam.classList.toggle("off", !t.enabled); };
+    const mir = h("button", { class: "cbtn", "aria-label": "Cermin" }, "🪞");
+    mir.onclick = () => { setMirror(!mirrorOn()); this.paintMirror(); };
+    flip.onclick = () => this.flipCamera();
+    end.onclick = () => this.hangup();
+    ctrls.replaceChildren(mic, ...(withVideo ? [cam, flip, mir] : []), end);
+  }
+
+  async flipCamera() {
+    if (!this.local || !this.pc) return;
+    try {
+      const next = this.facing === "user" ? "environment" : "user";
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: next } } });
+      const nt = s.getVideoTracks()[0];
+      const sender = this.pc.getSenders().find((x) => x.track?.kind === "video");
+      if (sender) await sender.replaceTrack(nt);
+      this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
+      this.local.addTrack(nt); this.ui.local.srcObject = this.local; this.facing = next; this.paintMirror();
+    } catch { toast("Tidak dapat beralih kamera.", "err"); }
+  }
+
+  async getMedia(video) {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Browser tidak mendukung panggilan. Buka lewat https di Chrome.");
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: video ? { facingMode: this.facing } : false });
+    } catch { throw new Error("Izin kamera/mikrofon ditolak. Aktifkan di pengaturan situs lalu coba lagi."); }
+  }
+
+  makePC(callId, side) {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.pc = pc;
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.ontrack = (e) => { if (this.ui) { this.ui.remote.srcObject = e.streams[0]; } };
+    const mine = collection(this.db, "calls", callId, side + "Candidates");
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(mine, e.candidate.toJSON()).catch(() => {}); };
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      if (s === "connected") { clearTimeout(this.discTimer); this.setStatus("Panggilan berlangsung"); }
+      else if (s === "connecting") this.setStatus("Menghubungkan…");
+      else if (s === "disconnected") {
+        this.setStatus("Koneksi tidak stabil, mencoba menyambung kembali…");
+        clearTimeout(this.discTimer); this.discTimer = setTimeout(() => { if (this.pc?.connectionState !== "connected") this.fail("Koneksi terputus."); }, 12000);
+      } else if (s === "failed") this.fail("Koneksi gagal. Jaringan mungkin memerlukan server TURN.");
+    };
+    // Dengarkan candidate dari pihak lain
+    // Candidate dari pihak lain ditahan sampai remote description terpasang.
+    const other = side === "caller" ? "receiver" : "caller";
+    this.pending = [];
+    this.unsubCall(onSnapshot(collection(this.db, "calls", callId, other + "Candidates"), (s) => {
+      s.docChanges().forEach((c) => {
+        if (c.type !== "added") return;
+        if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(c.doc.data())).catch(() => {});
+        else this.pending.push(c.doc.data());
+      });
+    }, () => {}));
+    this.watchObservers(callId);
+    return pc;
+  }
+  async setRemote(desc) {
+    await this.pc.setRemoteDescription(new RTCSessionDescription(desc));
+    (this.pending || []).splice(0).forEach((c) => this.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {}));
+  }
+  /* Admin bergabung sebagai pemantau: SELALU diumumkan ke peserta lewat banner. Admin hanya menerima, tidak mengirim kamera/mikrofon. */
+  watchObservers(callId) {
+    this.obsPeers = {};
+    this.unsubCall(onSnapshot(collection(this.db, "calls", callId, "observers"), (snap) => {
+      snap.docChanges().forEach((c) => {
+        const aid = c.doc.id;
+        if (c.type === "added") {
+          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
+          this.servePeer(callId, aid);
+        } else if (c.type === "removed") {
+          this.closePeer(aid); this.setChip(false); this.setBanner("👸 Admin keluar", 4000);
+        }
+      });
+    }, () => {}));
+  }
+  servePeer(callId, aid) {
+    this.closePeer(aid);
+    const pref = doc(this.db, "calls", callId, "obsPeers", this.uid);
+    const cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const rec = { pc, unsubs: [] }; this.obsPeers[aid] = rec;
+    this.local?.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: "member", ...e.candidate.toJSON() }).catch(() => {}); };
+    const pending = []; let handled = null;
+    rec.unsubs.push(onSnapshot(pref, async (s) => {
+      const d = s.data();
+      if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+      handled = d.offer.sdp;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+        pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+        await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+      } catch {}
+    }, () => {}));
+    rec.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== "admin") return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+  }
+  closePeer(aid) {
+    const r = this.obsPeers?.[aid]; if (!r) return;
+    r.unsubs.forEach((f) => { try { f(); } catch {} }); try { r.pc.close(); } catch {}
+    delete this.obsPeers[aid];
+  }
+  unsubCall(f) { (this.callUnsubs ||= []).push(f); }
+
+  /* ---------- Penelepon ---------- */
+  async startCall(peerUid, video = true) {
+    if (this.callId) return toast("Kamu sedang dalam panggilan.", "err");
+    this.ended = false; this.video = video;
+    const ui = this.buildUI("Memanggil " + this.nameOf(peerUid) + "…", video);
+    this.controls(video);
+    try {
+      this.local = await this.getMedia(video); ui.local && (ui.local.srcObject = this.local); this.paintMirror();
+      const ref = await addDoc(collection(this.db, "calls"), {
+        callerUid: this.uid, receiverUid: peerUid, groupId: this.groupId, status: "ringing", video, createdAt: serverTimestamp(), startedAt: null, endedAt: null, answer: null, offer: null,
+      });
+      this.callId = ref.id;
+      const pc = this.makePC(ref.id, "caller");
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      await updateDocSafe(ref, { offer: { type: offer.type, sdp: offer.sdp } }, true);
+      this.setStatus("Berdering…");
+      this.ringTimer = setTimeout(() => { if (!this.ended && this.pc?.connectionState !== "connected") { updateDoc(ref, { status: "missed", endedAt: serverTimestamp() }).catch(() => {}); this.fail("Tidak dijawab."); } }, 45000);
+      this.unsubCall(onSnapshot(ref, (s) => {
+        const d = s.data(); if (!d) return;
+        if (d.answer && !pc.currentRemoteDescription) { this.setRemote(d.answer).catch(() => {}); clearTimeout(this.ringTimer); this.setStatus("Menghubungkan…"); }
+        if (d.status === "rejected") this.fail("Panggilan ditolak.");
+        if (d.status === "ended") this.fail("Panggilan diakhiri.");
+      }));
+    } catch (e) { this.fail(e.message || "Gagal memulai panggilan."); }
+  }
+
+  /* ---------- Penerima ---------- */
+  showIncoming(callId, d) {
+    this.callId = callId; this.ended = false; this.video = !!d.video;
+    const ui = this.buildUI(this.nameOf(d.callerUid), false);
+    ui.remote.classList.add("hidden");
+    const info = h("div", { class: "center-info" }, h("div", { class: "pulse" }, "📞"), h("h2", {}, this.nameOf(d.callerUid)), h("p", {}, d.video ? "Panggilan video masuk…" : "Panggilan suara masuk…"));
+    ui.el.append(info);
+    const acc = h("button", { class: "cbtn acc", "aria-label": "Terima" }, "📞"), rej = h("button", { class: "cbtn end", "aria-label": "Tolak" }, "✕");
+    ui.ctrls.replaceChildren(rej, acc);
+    const ref = doc(this.db, "calls", callId);
+    this.unsubCall(onSnapshot(ref, (s) => { const x = s.data(); if (x && ["ended", "missed"].includes(x.status)) this.fail("Panggilan berakhir."); }));
+    rej.onclick = async () => { await updateDoc(ref, { status: "rejected", endedAt: serverTimestamp() }).catch(() => {}); this.cleanup(); };
+    acc.onclick = () => this.accept(callId, d, info);
+  }
+
+  async accept(callId, d, info) {
+    const ref = doc(this.db, "calls", callId);
+    try {
+      info.remove(); this.ui.remote.classList.remove("hidden");
+      if (d.video) { /* tampilkan video lokal */ const l = h("video", { class: "local", autoplay: true, playsinline: true }); l.muted = true; this.ui.el.insertBefore(l, this.ui.ctrls); this.ui.local = l; }
+      this.controls(!!d.video); this.setStatus("Menghubungkan…");
+      this.local = await this.getMedia(!!d.video); if (this.ui.local) this.ui.local.srcObject = this.local; this.paintMirror();
+      const pc = this.makePC(callId, "receiver");
+      // Offer bisa belum ada saat notifikasi pertama datang, jadi ambil data terbaru.
+      let offer = d.offer;
+      if (!offer) offer = (await getDoc(ref)).data()?.offer;
+      if (!offer) throw new Error("Data panggilan tidak lengkap.");
+      await this.setRemote(offer);
+      const answer = await pc.createAnswer(); await pc.setLocalDescription(answer);
+      await updateDoc(ref, { answer: { type: answer.type, sdp: answer.sdp }, status: "accepted", startedAt: serverTimestamp() });
+    } catch (e) { await updateDoc(ref, { status: "ended", endedAt: serverTimestamp() }).catch(() => {}); this.fail(e.message || "Gagal menerima panggilan."); }
+  }
+
+  async hangup() {
+    if (this.callId) await updateDoc(doc(this.db, "calls", this.callId), { status: "ended", endedAt: serverTimestamp() }).catch(() => {});
+    this.cleanup();
+  }
+  fail(msg) { if (this.ended) return; toast(msg, "err"); this.cleanup(); }
+  cleanup() {
+    this.ended = true; clearTimeout(this.ringTimer); clearTimeout(this.discTimer);
+    (this.callUnsubs || []).forEach((f) => { try { f(); } catch {} }); this.callUnsubs = [];
+    Object.keys(this.obsPeers || {}).forEach((k) => this.closePeer(k));
+    try { this.pc?.close(); } catch {} this.pc = null;
+    this.local?.getTracks().forEach((t) => t.stop()); this.local = null;
+    this.callId = null; this.closeUI();
+  }
+}
+
+// updateDoc yang mengembalikan error jelas jika gagal
+async function updateDocSafe(ref, data) { await updateDoc(ref, data); }
+
+/* ---- room.js ---- */
+
+
+/*
+ * Room panggilan grup (mesh WebRTC). 10 room, tiap room maksimal 10 peserta.
+ *   rooms/{r1..r10}.members = { uid: { sid, video, ts } }   (ts diperbarui tiap 20 dtk sebagai penanda masih aktif)
+ *   rooms/{rid}/sig/{pid} + /cand          signaling antar peserta (pid = penawar.sid.penjawab.sid)
+ *   rooms/{rid}/observers/{adminUid}        admin bergabung sebagai pemantau (SELALU diumumkan ke peserta)
+ *   rooms/{rid}/obsPeers/{uid_sid} + /cand  signaling admin <-> peserta
+ * Mesh berarti tiap peserta mengirim ke semua peserta lain: pada 6+ orang matikan kamera agar lancar.
+ */
+const ROOM_COUNT = 10;
+const ROOM_CAP = 10;
+const ROOM_FRESH_MS = 75000;
+const roomIds = Array.from({ length: ROOM_COUNT }, (_, i) => "r" + (i + 1));
+function freshMembers(data, now = Date.now()) {
+  return Object.entries(data?.members || {})
+    .filter(([, v]) => (v?.ts?.toMillis ? now - v.ts.toMillis() < ROOM_FRESH_MS : true))
+    .map(([uid, v]) => ({ uid, ...v }));
+}
+
+class RoomManager {
+  constructor({ db, uid, nameOf, root }) {
+    Object.assign(this, { db, uid, nameOf, root });
+    this.rid = null; this.sid = null; this.local = null; this.ui = null; this.peers = new Map(); this.unsubs = [];
+    this.obsPeers = {}; this.hb = null; this.seenSelf = false; this.facing = "user"; this.left = true;
+    window.addEventListener("pagehide", () => { if (this.rid) this.leave(true); });
+  }
+
+  async join(rid, wantVideo = true) {
+    if (this.rid) return toast("Kamu sedang berada di sebuah room.", "err");
+    if (!navigator.mediaDevices?.getUserMedia) return toast("Browser tidak mendukung panggilan. Buka lewat https di Chrome.", "err");
+    const ref = doc(this.db, "rooms", rid);
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+        video: wantVideo ? { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } } : false,
+      });
+    } catch { return toast("Izin kamera/mikrofon ditolak. Aktifkan di pengaturan situs.", "err"); }
+    const sid = Math.random().toString(36).slice(2, 10);
+    let others = 0;
+    try {
+      await runTransaction(this.db, async (tx) => {
+        const s = await tx.get(ref);
+        const fresh = freshMembers(s.exists() ? s.data() : {}).filter((m) => m.uid !== this.uid);
+        others = fresh.length;
+        if (fresh.length >= ROOM_CAP) { const e = new Error("full"); e.full = true; throw e; }
+        tx.set(ref, { members: { [this.uid]: { sid, video: !!wantVideo, ts: serverTimestamp() } } }, { merge: true });
+      });
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      return toast(e.full ? "Room ini sudah penuh (10/10). Silakan pindah ke Room lain." :
+        e.code === "permission-denied" ? "Room penuh atau berisi sesi lama. Pindah ke Room lain, atau minta admin mengosongkan room ini." :
+        "Gagal masuk room: " + friendlyError(e), "err");
+    }
+    this.rid = rid; this.sid = sid; this.local = stream; this.left = false; this.seenSelf = false;
+    // Banyak peserta: kamera dimatikan otomatis agar lancar (bisa dinyalakan lagi).
+    if (others >= 5) stream.getVideoTracks().forEach((t) => (t.enabled = false));
+    this.buildUI(rid);
+    this.hb = setInterval(() => updateDoc(ref, { ["members." + this.uid + ".ts"]: serverTimestamp() }).catch(() => {}), 20000);
+    this.unsubs.push(onSnapshot(ref, (snap) => {
+      const data = snap.data() || {};
+      const me = data.members?.[this.uid];
+      if (me && me.sid === this.sid) this.seenSelf = true;
+      else if (this.seenSelf) { toast("Kamu dikeluarkan dari room oleh admin.", "err"); this.leave(false); return; }
+      this.sync(freshMembers(data));
+    }, () => {}));
+    this.watchObservers();
+  }
+
+  /* ---------- peserta lain ---------- */
+  sync(members) {
+    if (!this.rid) return;
+    const others = members.filter((m) => m.uid !== this.uid);
+    for (const [uid, p] of [...this.peers]) {
+      const m = others.find((x) => x.uid === uid);
+      if (!m || m.sid !== p.sid) this.drop(uid);
+    }
+    others.forEach((m) => { if (!this.peers.has(m.uid)) this.connect(m); });
+    this.layout(members.length);
+  }
+
+  connect(m) {
+    const offerer = this.uid < m.uid;
+    const pid = (offerer ? [this.uid, this.sid, m.uid, m.sid] : [m.uid, m.sid, this.uid, this.sid]).join(".");
+    const pref = doc(this.db, "rooms", this.rid, "sig", pid), cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const p = { pc, sid: m.sid, unsubs: [], tile: this.makeTile(m.uid) };
+    this.peers.set(m.uid, p);
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.ontrack = (e) => { p.tile.video.srcObject = e.streams[0]; };
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: offerer ? "o" : "a", ...e.candidate.toJSON() }).catch(() => {}); };
+    pc.onconnectionstatechange = () => {
+      p.tile.state.textContent = pc.connectionState === "connected" ? "" : pc.connectionState === "failed" ? "terputus" : "menyambung…";
+      if (pc.connectionState === "connected") this.limitBitrate(pc);
+      if (pc.connectionState === "failed") setTimeout(() => { if (this.peers.get(m.uid) === p) { this.drop(m.uid); this.layout(this.peers.size + 1); this.refreshRoster(); } }, 2000);
+    };
+    const pending = []; const want = offerer ? "a" : "o";
+    const flush = () => pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+    p.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== want) return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+    if (offerer) {
+      (async () => {
+        try {
+          const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+          await setDoc(pref, { offer: { type: offer.type, sdp: offer.sdp }, answer: null });
+        } catch {}
+      })();
+      p.unsubs.push(onSnapshot(pref, (s) => {
+        const d = s.data();
+        if (d?.answer && !pc.currentRemoteDescription) pc.setRemoteDescription(new RTCSessionDescription(d.answer)).then(flush).catch(() => {});
+      }, () => {}));
+    } else {
+      let handled = null;
+      p.unsubs.push(onSnapshot(pref, async (s) => {
+        const d = s.data();
+        if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+        handled = d.offer.sdp;
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(d.offer)); flush();
+          const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+          await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+        } catch {}
+      }, () => {}));
+    }
+  }
+  refreshRoster() { /* memicu sinkronisasi ulang lewat heartbeat sendiri */ if (this.rid) updateDoc(doc(this.db, "rooms", this.rid), { ["members." + this.uid + ".ts"]: serverTimestamp() }).catch(() => {}); }
+  limitBitrate(pc) {
+    try { pc.getSenders().forEach((s) => { if (s.track?.kind !== "video") return; const prm = s.getParameters(); prm.encodings = prm.encodings?.length ? prm.encodings : [{}]; prm.encodings[0].maxBitrate = 130000; s.setParameters(prm).catch(() => {}); }); } catch {}
+  }
+  drop(uid) {
+    const p = this.peers.get(uid); if (!p) return;
+    p.unsubs.forEach((f) => { try { f(); } catch {} }); try { p.pc.close(); } catch {}
+    p.tile.el.remove(); this.peers.delete(uid);
+  }
+
+  /* ---------- UI ---------- */
+  makeTile(uid, me = false) {
+    const video = h("video", { autoplay: true, playsinline: true }); if (me) video.muted = true;
+    const state = h("span", { class: "muted small" });
+    const nm = me ? "Kamu" : this.nameOf(uid);
+    const el = h("div", { class: "rtile " + (me ? "me" : "other") }, h("div", { class: "ph" }, (nm[0] || "?").toUpperCase()), video, h("div", { class: "nm" }, nm, " ", state));
+    this.ui?.grid.append(el);
+    return { el, video, state };
+  }
+  buildUI(rid) {
+    this.closeUI();
+    const grid = h("div", { class: "room-grid" });
+    const title = h("b", {}, "Room " + rid.slice(1));
+    const count = h("div", {}, "");
+    const banner = h("div", { class: "banner hidden" });
+    const chip = h("div", { class: "obs-chip hidden" }, "👁 Dipantau admin");
+    const ctrls = h("div", { class: "ctrls" });
+    const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner, chip), ctrls);
+    this.root.append(el);
+    this.ui = { el, grid, count, banner, chip, ctrls };
+    this.me = this.makeTile(this.uid, true); this.me.video.srcObject = this.local; applyMirror(this.me.video, this.facing);
+    const mic = h("button", { class: "cbtn", "aria-label": "Mikrofon" }, "🎤");
+    const cam = h("button", { class: "cbtn", "aria-label": "Kamera" }, "📷");
+    const flip = h("button", { class: "cbtn", "aria-label": "Balik kamera" }, "🔄");
+    const end = h("button", { class: "cbtn end", "aria-label": "Keluar room" }, "📵");
+    const vt = () => this.local.getVideoTracks()[0];
+    const paintCam = () => cam.classList.toggle("off", !!vt() && !vt().enabled);
+    paintCam();
+    mic.onclick = () => { const t = this.local.getAudioTracks()[0]; if (!t) return; t.enabled = !t.enabled; mic.classList.toggle("off", !t.enabled); mic.textContent = t.enabled ? "🎤" : "🔇"; };
+    cam.onclick = () => { const t = vt(); if (!t) return toast("Kamu masuk tanpa kamera.", "err"); t.enabled = !t.enabled; paintCam(); };
+    const mir = h("button", { class: "cbtn", "aria-label": "Cermin" }, "🪞");
+    mir.onclick = () => { setMirror(!mirrorOn()); applyMirror(this.me.video, this.facing); };
+    flip.onclick = () => this.flipCamera();
+    end.onclick = () => this.leave(false);
+    ctrls.replaceChildren(mic, cam, flip, mir, end);
+    this.layout(1);
+  }
+  layout(n) {
+    if (!this.ui) return;
+    const g = this.ui.grid; const others = this.peers.size;
+    g.classList.toggle("duo", others === 1);
+    g.style.setProperty("--cols", String(n <= 4 ? 2 : 3));
+    g.style.setProperty("--rows", String(Math.ceil(n / (n <= 4 ? 2 : 3))));
+    if (others === 0) g.classList.add("solo"); else g.classList.remove("solo");
+    this.ui.count.textContent = `${n}/${ROOM_CAP} peserta` + (n > 5 ? " · matikan kamera agar lancar" : "");
+  }
+  closeUI() { this.ui?.el.remove(); this.ui = null; }
+  setChip(on) { const c = this.ui?.chip; if (c) c.classList.toggle("hidden", !on); }
+  setBanner(t, ms) {
+    const b = this.ui?.banner; if (!b) return;
+    b.textContent = t || ""; b.classList.toggle("hidden", !t);
+    if (ms) setTimeout(() => { if (b.textContent === t) { b.textContent = ""; b.classList.add("hidden"); } }, ms);
+  }
+  async flipCamera() {
+    try {
+      const next = this.facing === "user" ? "environment" : "user";
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: next }, width: { ideal: 320 }, height: { ideal: 240 } } });
+      const nt = s.getVideoTracks()[0];
+      const was = this.local.getVideoTracks()[0]; if (was) nt.enabled = was.enabled;
+      this.peers.forEach((p) => { const sn = p.pc.getSenders().find((x) => x.track?.kind === "video"); if (sn) sn.replaceTrack(nt); });
+      this.local.getVideoTracks().forEach((t) => { t.stop(); this.local.removeTrack(t); });
+      this.local.addTrack(nt); this.me.video.srcObject = this.local; this.facing = next; applyMirror(this.me.video, this.facing);
+    } catch { toast("Tidak dapat beralih kamera.", "err"); }
+  }
+
+  /* ---------- pemantau admin (selalu diumumkan) ---------- */
+  watchObservers() {
+    const rid = this.rid;
+    this.unsubs.push(onSnapshot(collection(this.db, "rooms", rid, "observers"), (snap) => {
+      snap.docChanges().forEach((c) => {
+        if (c.type === "added") {
+          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
+          this.serveAdmin(c.doc.id);
+        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner("👸 Admin keluar", 4000); }
+      });
+    }, () => {}));
+  }
+  serveAdmin(aid) {
+    this.closeAdmin(aid);
+    const pref = doc(this.db, "rooms", this.rid, "obsPeers", this.uid + "_" + this.sid), cand = collection(pref, "cand");
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const rec = { pc, unsubs: [] }; this.obsPeers[aid] = rec;
+    this.local.getTracks().forEach((t) => pc.addTrack(t, this.local));
+    pc.onicecandidate = (e) => { if (e.candidate) addDoc(cand, { from: "member", ...e.candidate.toJSON() }).catch(() => {}); };
+    const pending = []; let handled = null;
+    rec.unsubs.push(onSnapshot(pref, async (s) => {
+      const d = s.data();
+      if (!d?.offer || d.answer || handled === d.offer.sdp) return;
+      handled = d.offer.sdp;
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+        pending.splice(0).forEach((x) => pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}));
+        const a = await pc.createAnswer(); await pc.setLocalDescription(a);
+        await updateDoc(pref, { answer: { type: a.type, sdp: a.sdp } });
+      } catch {}
+    }, () => {}));
+    rec.unsubs.push(onSnapshot(cand, (s) => s.docChanges().forEach((ch) => {
+      if (ch.type !== "added") return;
+      const { from, ...x } = ch.doc.data(); if (from !== "admin") return;
+      if (pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(x)).catch(() => {}); else pending.push(x);
+    }), () => {}));
+  }
+  closeAdmin(aid) {
+    const r = this.obsPeers[aid]; if (!r) return;
+    r.unsubs.forEach((f) => { try { f(); } catch {} }); try { r.pc.close(); } catch {}
+    delete this.obsPeers[aid];
+  }
+
+  async leave(quiet) {
+    if (this.left) return; this.left = true;
+    const rid = this.rid, ref = rid && doc(this.db, "rooms", rid);
+    clearInterval(this.hb); this.unsubs.forEach((f) => { try { f(); } catch {} }); this.unsubs = [];
+    [...this.peers.keys()].forEach((u) => this.drop(u));
+    Object.keys(this.obsPeers).forEach((k) => this.closeAdmin(k));
+    this.local?.getTracks().forEach((t) => t.stop()); this.local = null;
+    this.rid = null; this.closeUI();
+    if (ref) await updateDoc(ref, { ["members." + this.uid]: deleteField() }).catch(() => {});
+  }
+}
+
+/* ---- app.js ---- */
+
+
+
+
+
+
+
+
+initTheme();
+const root = document.getElementById("app");
+let cleanups = [];
+const clean = () => { cleanups.forEach((f) => { try { f(); } catch {} }); cleanups = []; };
+
+if (!configured) showConfigHelp(root, "Sela Group Chat");
+else onAuthStateChanged(auth, (u) => { clean(); if (u) boot(u); else mount(root, googleLoginView()); });
+
+/* ======================= ALUR UTAMA ======================= */
+async function boot(user) {
+  const uid = user.uid;
+  const S = { step: null, member: undefined, req: undefined, view: null, viewCleanup: null, group: null, name: "" };
+  cleanups.push(() => S.viewCleanup?.());
+  mount(root, loadingView("Menyiapkan akun…"));
+
+  try {
+    const uref = doc(db, "users", uid);
+    const us = await getDoc(uref);
+    if (!us.exists()) {
+      await setDoc(uref, { uid, displayName: "", email: user.email || "", approvalStatus: "none", createdAt: serverTimestamp() });
+    } else S.name = us.data().displayName || "";
+    const gs = await getDoc(doc(db, "groups", GROUP_ID));
+    S.group = gs.exists() ? gs.data() : null;
+  } catch (e) { return mount(root, errorView("Gagal menyiapkan akun: " + friendlyError(e))); }
+
+  const fail = (e) => mount(root, errorView(friendlyError(e)));
+  cleanups.push(onSnapshot(doc(db, "groupMembers", `${GROUP_ID}_${uid}`), (s) => { S.member = s.exists() ? s.data() : null; render(); }, fail));
+  cleanups.push(onSnapshot(doc(db, "joinRequests", uid), (s) => {
+    const prev = S.req; S.req = s.exists() ? s.data() : null;
+    if (prev && S.req && prev.status !== S.req.status) notifyDecision(S.req);
+    render();
+  }, fail));
+
+  function render() {
+    if (S.member === undefined || S.req === undefined) return;
+    let target;
+    if (S.member?.status === "active") target = "chat";
+    else if (S.member?.status === "restricted") target = "restricted";
+    else if (!S.req) target = S.step === "record" ? "record" : "rules";
+    else if (S.req.status === "rejected" && S.step === "record") target = "record";
+    else target = "waiting";
+    if (target === "chat" && S.view === "chat") return;
+    S.viewCleanup?.(); S.viewCleanup = null; S.view = target;
+    const go = (step) => { S.step = step; render(); };
+    if (target === "chat") { const v = chatView(S, user); S.viewCleanup = v.cleanup; mount(root, v.node); }
+    else if (target === "restricted") mount(root, restrictedView());
+    else if (target === "rules") mount(root, rulesView(S, uid, go));
+    else if (target === "record") { const v = recordView(S, uid, go); S.viewCleanup = v.cleanup; mount(root, v.node); }
+    else mount(root, waitingView(S, uid, go));
+  }
+}
+
+function notifyDecision(req) {
+  const ok = req.status === "approved";
+  const msg = ok ? "Pengajuanmu disetujui admin Sela 🎉" : "Pengajuanmu ditolak admin Sela.";
+  toast(msg, ok ? "good" : "err");
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification("Sela Group Chat", { body: msg }); } catch {}
+}
+
+/* ======================= HALAMAN 2: PERSYARATAN ======================= */
+function rulesView(S, uid, go) {
+  const g = S.group || {};
+  const err = h("div", { class: "error" });
+  const name = h("input", { class: "input", maxlength: "40", placeholder: "Nama panggilan", value: S.name });
+  const agree = h("input", { type: "checkbox" });
+  let photo = null;
+  const pv = h("div", { class: "avatar", style: "width:84px;height:84px;font-size:2rem;margin:auto" }, "📷");
+  const pf = h("input", { type: "file", accept: "image/*", class: "hidden" });
+  pf.onchange = async () => {
+    const f = pf.files[0]; pf.value = ""; if (!f) return; err.textContent = "";
+    try { photo = await compressImage(f, 192, 0.7, 50000); pv.replaceChildren(h("img", { src: photo, style: "width:100%;height:100%;object-fit:cover" })); }
+    catch (e) { err.textContent = e.message || "Foto tidak dapat diproses."; }
+  };
+  const photoBox = h("div", { class: "stack", style: "text-align:center" }, pv, pf, h("button", { class: "btn ghost small", onclick: () => pf.click() }, "Pasang foto profil"),
+    h("p", { class: "muted small" }, "Foto profil hanya bisa dipasang sekarang. Setelah disetujui, profil tidak bisa diubah oleh anggota."));
+  const next = h("button", { class: "btn primary", disabled: true }, "LANJUT KE VERIFIKASI");
+  const check = () => { next.disabled = !(agree.checked && name.value.trim().length >= 2); };
+  agree.addEventListener("change", check); name.addEventListener("input", check);
+
+  // Audio contoh dari admin
+  const audioBox = h("div", { class: "stack" });
+  if (g.hasInstructionAudio) {
+    const playBtn = h("button", { class: "btn ghost" }, "▶ Putar, dengarkan yah.");
+    const vol = h("input", { type: "range", min: "0", max: "1", step: "0.05", value: "1", "aria-label": "Volume" });
+    let au = null;
+    playBtn.onclick = async () => {
+      try {
+        if (!au) {
+          const snap = await getDoc(doc(db, "groupAssets", "instruction")); const url = snap.data().data;
+          au = new Audio(url); au.onended = () => (playBtn.textContent = "▶ Putar, dengarkan yah.");
+          vol.oninput = () => (au.volume = Number(vol.value));
+        }
+        if (au.paused) { await au.play(); playBtn.textContent = "⏸ Jeda"; } else { au.pause(); playBtn.textContent = "▶ Lanjut putar"; }
+      } catch (e) { err.textContent = "Audio tidak dapat diputar: " + friendlyError(e); }
+    };
+    audioBox.append(playBtn, h("div", { class: "row" }, "🔈", h("div", { class: "grow" }, vol), "🔊"));
+  } else {
+    audioBox.append(h("button", { class: "btn ghost", disabled: true }, "▶ Putar, dengarkan yah."), h("p", { class: "muted" }, "Admin belum mengunggah audio contoh."));
+  }
+
+  next.onclick = async () => {
+    const n = name.value.trim(); err.textContent = ""; next.disabled = true; next.textContent = "Menyimpan…";
+    try {
+      await updateDoc(doc(db, "users", uid), { displayName: n });
+      await setDoc(doc(db, "profiles", uid), { displayName: n, ...(photo ? { photoURL: photo } : {}), updatedAt: serverTimestamp() }, { merge: true });
+      S.name = n; go("record");
+    } catch (e) { err.textContent = friendlyError(e); next.disabled = false; next.textContent = "LANJUT KE VERIFIKASI"; }
+  };
+
+  return h("div", { class: "screen" },
+    h("div", { class: "logo" }, "S"),
+    h("div", { class: "hero" }, "SELAMAT DATANG DI GRUP SELA"),
+    g.welcomeMessage ? h("p", { class: "muted", style: "text-align:center" }, g.welcomeMessage) : null,
+    h("div", { class: "card stack" },
+      h("p", {}, "Harus cewek yah, cowok skip. Sebelum bergabung, silakan kirim rekaman suara untuk proses verifikasi oleh admin Sela. Ucapkan: ", h("b", {}, "Halo Kak Sela, gabung dong.")),
+      h("p", { class: "muted" }, "Catatan: rekaman suara hanya digunakan untuk proses peninjauan oleh admin dan tidak dapat memastikan jenis kelamin seseorang secara akurat. Keputusan akhir ada pada admin."),
+      audioBox),
+    h("div", { class: "card stack" },
+      photoBox, h("label", {}, "Nama panggilan"), name,
+      g.rulesText ? h("details", {}, h("summary", {}, "Baca persyaratan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null,
+      g.privacyText ? h("details", {}, h("summary", {}, "Baca kebijakan privasi"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.privacyText)) : null,
+      h("label", { class: "checkrow" }, agree, h("span", {}, "Saya menyetujui persyaratan grup dan kebijakan privasi, termasuk bahwa admin akan mendengarkan rekaman suara saya untuk verifikasi.")),
+      next, err),
+    h("button", { class: "btn ghost small", onclick: () => signOutNow() }, "Keluar"));
+}
+
+/* ======================= HALAMAN 3: REKAM SUARA ======================= */
+function recordView(S, uid, go) {
+  const maxSec = Number(S.group?.maxRecordSeconds) || 15, minSec = 2;
+  let stream, mr, chunks = [], blob = null, startedAt = 0, tick = null, raf = null, actx = null, analyser = null, dur = 0;
+  const canvas = h("canvas", { class: "waveform", width: 600, height: 180 });
+  const timer = h("div", { class: "timer" }, "00:00");
+  const err = h("div", { class: "error", role: "alert" });
+  const player = h("audio", { controls: true, class: "hidden" });
+  const prog = h("progress", { class: "hidden", max: "100", value: "0" });
+  const startBtn = h("button", { class: "btn primary" }, "🎙 Mulai Rekam");
+  const stopBtn = h("button", { class: "btn danger hidden" }, "⏹ Berhenti");
+  const redoBtn = h("button", { class: "btn ghost hidden" }, "↺ Rekam Ulang");
+  const sendBtn = h("button", { class: "btn primary hidden" }, "Kirim ke Admin Sela");
+  const fmt = (s) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+
+  function pickMime() {
+    for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]) if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+    return "";
+  }
+  function draw() {
+    const c = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
+    const data = new Uint8Array(analyser.fftSize);
+    const loop = () => {
+      analyser.getByteTimeDomainData(data);
+      c.clearRect(0, 0, W, H);
+      const grad = c.createLinearGradient(0, 0, W, 0); grad.addColorStop(0, "#8b5cf6"); grad.addColorStop(1, "#ec4899");
+      c.strokeStyle = grad; c.lineWidth = 3; c.beginPath();
+      for (let i = 0; i < data.length; i++) { const x = (i / data.length) * W, y = (data[i] / 255) * H; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+      c.stroke(); raf = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+  function stopStream() { stream?.getTracks().forEach((t) => t.stop()); try { actx?.close(); } catch {} cancelAnimationFrame(raf); clearInterval(tick); }
+
+  startBtn.onclick = async () => {
+    err.textContent = "";
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) { err.textContent = "Browser ini tidak mendukung perekaman. Gunakan Chrome terbaru dan buka lewat https."; return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { err.textContent = "Izin mikrofon ditolak. Aktifkan izin mikrofon di pengaturan situs browser, lalu coba lagi."; return; }
+    const mime = pickMime(); chunks = []; blob = null;
+    mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 24000 });
+    mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    mr.onstop = () => {
+      dur = (Date.now() - startedAt) / 1000; stopStream();
+      blob = new Blob(chunks, { type: mr.mimeType || mime || "audio/webm" });
+      if (dur < minSec || blob.size < 2000) { blob = null; err.textContent = `Rekaman terlalu singkat atau kosong (minimal ${minSec} detik). Silakan rekam ulang.`; startBtn.classList.remove("hidden"); return; }
+      player.src = URL.createObjectURL(blob); player.classList.remove("hidden");
+      redoBtn.classList.remove("hidden"); sendBtn.classList.remove("hidden");
+    };
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = actx.createAnalyser(); analyser.fftSize = 1024; actx.createMediaStreamSource(stream).connect(analyser);
+    draw(); mr.start(250); startedAt = Date.now();
+    startBtn.classList.add("hidden"); stopBtn.classList.remove("hidden");
+    tick = setInterval(() => { const s = (Date.now() - startedAt) / 1000; timer.textContent = fmt(s) + " / " + fmt(maxSec); if (s >= maxSec) stopBtn.click(); }, 200);
+  };
+  stopBtn.onclick = () => { stopBtn.classList.add("hidden"); if (mr && mr.state !== "inactive") mr.stop(); };
+  redoBtn.onclick = () => {
+    blob = null; player.classList.add("hidden"); player.removeAttribute("src"); redoBtn.classList.add("hidden"); sendBtn.classList.add("hidden");
+    startBtn.classList.remove("hidden"); timer.textContent = "00:00"; err.textContent = "";
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+  };
+  sendBtn.onclick = async () => {
+    if (!blob) return;
+    err.textContent = ""; sendBtn.disabled = redoBtn.disabled = true; sendBtn.textContent = "Mengunggah…"; prog.classList.remove("hidden");
+    try {
+      const dataUrl = await blobToDataURL(blob); if (dataUrl.length > 700000) throw new Error("Rekaman terlalu besar. Rekam lebih singkat.");
+      await setDoc(doc(db, "joinAudio", uid), { uid, data: dataUrl, mime: blob.type, createdAt: serverTimestamp() });
+      const data = { uid, hasAudio: true, status: "pending", submittedAt: serverTimestamp(), reviewedAt: null, reviewedBy: null, rejectionReason: null, canResubmit: false };
+      if (S.req) await updateDoc(doc(db, "joinRequests", uid), data); else await setDoc(doc(db, "joinRequests", uid), data);
+      toast("Tunggu admin Sela menyetujui dulu yah.", "good");
+      S.step = null; // listener real-time akan menampilkan halaman menunggu
+    } catch (e) {
+      err.textContent = "Gagal mengirim: " + friendlyError(e); sendBtn.disabled = redoBtn.disabled = false; sendBtn.textContent = "Kirim ke Admin Sela"; prog.classList.add("hidden");
+    }
+  };
+
+  return {
+    cleanup: stopStream,
+    node: h("div", { class: "screen" }, h("h1", {}, "Rekam Suara"),
+      h("div", { class: "card stack" },
+        h("p", {}, "Ucapkan: ", h("b", {}, "“Halo Kak Sela, gabung dong.”"), ` (maks. ${maxSec} detik)`),
+        canvas, timer, startBtn, stopBtn, player, redoBtn, sendBtn, prog, err),
+      h("button", { class: "btn ghost small", onclick: () => { S.step = "rules"; go("rules"); } }, "← Kembali")),
+  };
+}
+
+/* ======================= HALAMAN 4: MENUNGGU ======================= */
+function waitingView(S, uid, go) {
+  const r = S.req;
+  const label = { pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" }[r.status] || r.status;
+  const msg = h("div", { class: "muted" });
+  const check = h("button", { class: "btn ghost", onclick: async () => {
+    check.disabled = true; msg.textContent = "Memeriksa…";
+    try { const s = await getDocFromServer(doc(db, "joinRequests", uid)); msg.textContent = "Status terbaru: " + ({ pending: "Menunggu", approved: "Disetujui", rejected: "Ditolak" }[s.data()?.status] || "-"); }
+    catch (e) { msg.textContent = friendlyError(e); } finally { check.disabled = false; }
+  } }, "Periksa Status");
+  const notif = ("Notification" in window && Notification.permission === "default")
+    ? h("button", { class: "btn ghost small", onclick: async () => { await Notification.requestPermission(); go(null); } }, "🔔 Aktifkan notifikasi") : null;
+  return h("div", { class: "screen center" }, h("div", { class: "card stack", style: "text-align:center" },
+    r.status === "pending" ? h("div", { class: "pulse" }, "🎧") : null,
+    h("h2", {}, r.status === "rejected" ? "Pengajuan ditolak" : r.status === "approved" ? "Disetujui, menyiapkan akses…" : "Menunggu persetujuan admin Sela"),
+    r.status === "pending" ? h("p", { class: "muted" }, "Tunggu admin Sela menyetujui dulu yah.") : null,
+    h("div", {}, "Status: ", h("span", { class: "badge " + r.status }, label)),
+    h("p", { class: "muted" }, "Diajukan: " + fmtDateTime(r.submittedAt)),
+    r.status === "rejected" ? h("p", { class: "error" }, "Alasan: " + (r.rejectionReason || "Tidak ada alasan yang diberikan.")) : null,
+    r.status === "rejected" && r.canResubmit ? h("button", { class: "btn primary", onclick: () => go("record") }, "Ajukan Ulang") : null,
+    r.status === "rejected" && !r.canResubmit ? h("p", { class: "muted" }, "Admin tidak mengizinkan pengajuan ulang.") : null,
+    check, msg, notif));
+}
+
+function restrictedView() {
+  return h("div", { class: "screen center" }, h("div", { class: "card stack", style: "text-align:center" },
+    h("h2", {}, "Akunmu dibatasi"), h("p", { class: "muted" }, "Admin Sela membatasi akses akunmu ke grup karena pelanggaran aturan."),
+    h("button", { class: "btn ghost", onclick: () => signOutNow() }, "Keluar")));
+}
+
+/* ======================= HALAMAN 5: GROUP CHAT ======================= */
+const EMOJIS = ["😀", "😂", "🥰", "😍", "😘", "😎", "🤗", "😭", "🙏", "👍", "👏", "🔥", "💜", "💖", "✨", "🎉", "😅", "🤔", "😴", "🥳", "😇", "🙈", "💪", "🌸"];
+const REACTS = ["❤️", "😂", "👍", "😮", "😢", "🙏"];
+
+function chatView(S, user) {
+  const uid = user.uid, g = S.group || {};
+  const unsubs = [], profiles = {}, urlCache = {};
+  let members = [], online = {}, replyTo = null, firstLoad = true, lastDocs = [];
+  let crowns = new Set(), pins = [];
+  const baseName = (id) => profiles[id]?.displayName || "Anggota";
+  const nameOf = (id) => (crowns.has(id) ? "👑 " : "") + baseName(id);
+  const initial = (id) => (nameOf(id)[0] || "?").toUpperCase();
+
+  const call = new CallManager({ db, uid, groupId: GROUP_ID, nameOf, root: document.body });
+  unsubs.push(call.listenIncoming());
+  const rooms = new RoomManager({ db, uid, nameOf, root: document.body });
+  unsubs.push(() => rooms.leave(true));
+
+  // Kehadiran (online/offline) lewat Realtime Database
+  const sref = dRef(rtdb, `status/${uid}`);
+  unsubs.push(onValue(dRef(rtdb, ".info/connected"), (s) => {
+    if (s.val() === false) return;
+    onDisconnect(sref).set({ state: "offline", lastChanged: dTs() }).then(() => dSet(sref, { state: "online", lastChanged: dTs() })).catch(() => {});
+  }));
+  unsubs.push(onValue(dRef(rtdb, "status"), (s) => { online = {}; s.forEach((c) => { online[c.key] = c.val().state === "online"; }); updateHead(); }));
+  unsubs.push(() => dSet(sref, { state: "offline", lastChanged: dTs() }).catch(() => {}));
+
+  unsubs.push(onSnapshot(collection(db, "profiles"), (s) => { s.forEach((d) => (profiles[d.id] = d.data())); renderMsgs(); }, () => {}));
+  unsubs.push(onSnapshot(query(collection(db, "groupMembers"), where("groupId", "==", GROUP_ID)), (s) => {
+    members = s.docs.map((d) => d.data()).filter((m) => m.status === "active"); crowns = new Set(members.filter((m) => m.crown).map((m) => m.uid)); updateHead(); renderMsgs(); paintPins();
+  }, () => {}));
+
+  const headSub = h("span", { class: "muted small" });
+  const avatar = g.photoURL ? h("img", { class: "avatar", src: g.photoURL, alt: "" }) : h("div", { class: "avatar" }, "S");
+  avatar.addEventListener("click", () => openGroup());
+  function updateHead() { const on = members.filter((m) => online[m.uid]).length; headSub.textContent = `${members.length} anggota · ${on} online`; }
+  const head = h("div", { class: "chat-head" }, avatar,
+    h("div", { class: "title", onclick: openGroup }, h("b", {}, g.name || "Grup Sela"), headSub),
+    h("button", { class: "icon-btn", "aria-label": "Panggilan suara", onclick: () => pickPeer(false) }, "📞"),
+    h("button", { class: "icon-btn", "aria-label": "Video call", onclick: () => pickPeer(true) }, "🎥"),
+    h("button", { class: "icon-btn", "aria-label": "Room panggilan grup", onclick: openRooms }, "🚪"),
+    h("button", { class: "icon-btn", "aria-label": "Menu", onclick: () => openMenu() }, "⋮"));
+
+  /* Layar penuh: sembunyikan bilah alamat browser. Pilihan diingat; diaktifkan pada ketukan berikutnya (aturan browser). */
+  const fsOn = () => !!document.fullscreenElement;
+  const fsPref = () => { try { return localStorage.getItem("sela-fs") === "1"; } catch { return false; } };
+  const fsSet = (v) => { try { localStorage.setItem("sela-fs", v ? "1" : "0"); } catch {} };
+  async function fsToggle() {
+    try {
+      if (fsOn()) { fsSet(false); await document.exitFullscreen(); }
+      else { fsSet(true); await document.documentElement.requestFullscreen({ navigationUI: "hide" }); }
+    } catch { toast("Browser ini tidak mengizinkan layar penuh. Pakai menu ⋮ browser → Tambahkan ke layar utama.", "err"); }
+  }
+  if (fsPref() && !fsOn() && document.documentElement.requestFullscreen) {
+    const once = () => { document.removeEventListener("click", once, true); if (fsPref() && !fsOn()) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {}); };
+    document.addEventListener("click", once, true);
+  }
+  function openMenu() {
+    let close = () => {};
+    const row = (t, fn) => h("button", { class: "btn ghost", style: "justify-content:flex-start;text-align:left", onclick: () => { close(); fn(); } }, t);
+    close = openSheet("Menu", h("div", { class: "stack" },
+      row("🖼 Galeri foto & video", openGallery),
+      row("👥 Anggota grup", openMembers),
+      row("👤 Profil saya", () => openProfile(uid)),
+      row(pins.length ? `📌 Pesan disematkan (${pins.length})` : "📌 Pesan disematkan", () => (pins.length ? openPins() : toast("Belum ada pesan disematkan."))),
+      row("🌓 Ganti tema", toggleTheme),
+      row(fsOn() ? "⛶ Keluar layar penuh" : "⛶ Layar penuh", fsToggle),
+      row("ℹ️ Info grup", openGroup)));
+  }
+
+
+  const list = h("div", { class: "msgs" });
+  const pinBar = h("div", { class: "pinbar hidden", onclick: () => openPins() });
+  function paintPins() {
+    pinBar.classList.toggle("hidden", !pins.length);
+    if (!pins.length) return;
+    const p = pins[0];
+    pinBar.replaceChildren(h("span", {}, "📌"), h("div", { class: "grow" }, h("b", {}, "Disematkan" + (pins.length > 1 ? ` (${pins.length})` : "") + " · " + nameOf(p.senderUid)), h("div", { class: "pin-text" }, p.text || (p.messageType === "image" ? "📷 Foto" : p.messageType === "video" ? "🎥 Video" : ""))));
+  }
+  unsubs.push(onSnapshot(query(collection(db, "pins"), where("groupId", "==", GROUP_ID)), (s) => {
+    pins = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (y.createdAt?.toMillis?.() || 0) - (x.createdAt?.toMillis?.() || 0)); paintPins();
+  }, () => {}));
+  const canPin = () => crowns.has(uid);
+  function openPins() {
+    let close = () => {};
+    close = openSheet("Pesan disematkan", h("div", { class: "stack" }, pins.map((p) => h("div", { class: "card stack" },
+      h("div", { class: "row" }, h("b", { class: "grow" }, nameOf(p.senderUid)), h("span", { class: "muted small" }, fmtDateTime(p.createdAt))),
+      h("div", { style: "white-space:pre-wrap;overflow-wrap:break-word" }, p.text || (p.messageType === "image" ? "📷 Foto" : "🎥 Video")),
+      h("div", { class: "row wrap" },
+        h("button", { class: "btn ghost small", onclick: () => { close(); const t = list.querySelector('[data-mid="' + p.messageId + '"]'); if (t) { t.scrollIntoView({ block: "center", behavior: "smooth" }); t.classList.add("flash"); setTimeout(() => t.classList.remove("flash"), 1200); } else toast("Pesan asli tidak ada di layar."); } }, "Lihat pesan"),
+        canPin() ? h("button", { class: "btn danger small", onclick: async () => { try { await deleteDoc(doc(db, "pins", p.id)); toast("Sematan dilepas", "good"); close(); } catch (e) { toast(friendlyError(e), "err"); } } }, "Lepas sematan") : null)))));
+  }
+  async function pinMsg(m) {
+    try { await setDoc(doc(db, "pins", m.id), { groupId: GROUP_ID, messageId: m.id, senderUid: m.senderUid, messageType: m.messageType, text: String(m.text || "").slice(0, 300), pinnedBy: uid, createdAt: serverTimestamp() }); toast("Pesan disematkan untuk semua anggota", "good"); }
+    catch (e) { toast(friendlyError(e), "err"); }
+  }
+  const replyBar = h("div", { class: "replybar hidden" });
+  const input = h("textarea", { rows: "1", placeholder: "Tulis pesan…", "aria-label": "Pesan" });
+  const fileInput = h("input", { type: "file", accept: "image/*,video/*", class: "hidden" });
+  const sendBtn = h("button", { class: "send", "aria-label": "Kirim" }, "➤");
+  const composer = h("div", { class: "composer" },
+    h("button", { class: "icon-btn", onclick: openEmoji, "aria-label": "Emoji" }, "😊"),
+    h("button", { class: "icon-btn", onclick: () => fileInput.click(), "aria-label": "Lampirkan foto" }, "📎"),
+    h("button", { class: "icon-btn", onclick: recordVideo, "aria-label": "Rekam video" }, "🎥"),
+    input, sendBtn, fileInput);
+
+  input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 110) + "px"; });
+  sendBtn.onclick = sendText;
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !("ontouchstart" in window)) { e.preventDefault(); sendText(); } });
+  fileInput.onchange = () => { const f = fileInput.files[0]; fileInput.value = ""; if (f) previewMedia(f); };
+
+  function setReply(m) {
+    replyTo = m ? { id: m.id, text: m.text || (m.messageType === "image" ? "📷 Foto" : "🎥 Video"), name: nameOf(m.senderUid) } : null;
+    replyBar.classList.toggle("hidden", !replyTo);
+    replyBar.replaceChildren(h("div", { class: "grow" }, "Membalas ", h("b", {}, replyTo?.name || ""), ": ", (replyTo?.text || "").slice(0, 60)), h("button", { class: "icon-btn", onclick: () => setReply(null) }, "✕"));
+    if (m) input.focus();
+  }
+
+  async function sendText() {
+    const text = input.value.trim(); if (!text) return;
+    input.value = ""; input.style.height = "auto";
+    const rt = replyTo; setReply(null);
+    try { await addDoc(collection(db, "messages"), base("text", text, null, rt)); }
+    catch (e) { input.value = text; toast("Pesan gagal terkirim: " + friendlyError(e), "err"); }
+  }
+  function base(type, text, imageData, rt, videoData, media) {
+    return { groupId: GROUP_ID, senderUid: uid, messageType: type, text: text || "", imageData: imageData || null, videoData: videoData || null, mediaKey: media?.key || null, mime: media?.mime || null, size: media?.size || null, createdAt: serverTimestamp(), replyTo: rt || null, reactions: {}, readBy: {} };
+  }
+
+  async function previewMedia(file) {
+    if (file.type.startsWith("video/")) return previewVideo(file);
+    if (!file.type.startsWith("image/")) return toast("Pilih foto atau video.", "err");
+    let dataUrl;
+    try { const ed = await editImage(file); if (!ed) return; file = ed; dataUrl = file.hd ? await compressImage(file, 2560, 0.92, 1e8) : await compressImage(file, 1280, 0.75, 900000); } catch (e) { return toast(e.message || "Foto tidak dapat diproses.", "err"); }
+    const err = h("div", { class: "error" });
+    const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
+    const send = h("button", { class: "btn primary" }, "Kirim");
+    const close = openSheet("Pratinjau", h("div", { class: "stack" },
+      h("img", { src: dataUrl, style: "max-width:100%;border-radius:12px" }), cap, err, send));
+    send.onclick = async () => {
+      send.disabled = true; send.textContent = "Mengirim…"; err.textContent = "";
+      try {
+        const rt = replyTo; setReply(null);
+        let mk = null;
+        try { mk = await uploadMedia(await (await fetch(dataUrl)).blob(), "image/jpeg"); } catch { mk = null; }
+        if (mk) await addDoc(collection(db, "messages"), base("image", cap.value.trim(), null, rt, null, mk));
+        else { const small = await compressImage(file, 800, 0.6, 220000); await addDoc(collection(db, "messages"), base("image", cap.value.trim(), small, rt)); }
+        close();
+      } catch (e) { err.textContent = "Gagal mengirim: " + friendlyError(e); send.disabled = false; send.textContent = "Coba lagi"; }
+    };
+  }
+
+  async function videoSendUI(box, blob, err, close, limit = 12e6) {
+    if (blob.size > limit) { box.replaceChildren(h("p", { class: "error" }, `Video terlalu besar (maks. ${Math.round(limit / 1e6)} MB). Pilih video yang lebih pendek atau pangkas dulu.`)); return; }
+    const cap = h("input", { class: "input", placeholder: "Tambah keterangan (opsional)", maxlength: "500" });
+    const send = h("button", { class: "btn primary" }, "Kirim");
+    box.replaceChildren(h("video", { src: URL.createObjectURL(blob), controls: true, playsinline: true, style: "width:100%;border-radius:12px" }), h("p", { class: "muted small" }, (blob.size / 1048576).toFixed(1) + " MB"), cap, err, send);
+    send.onclick = async () => {
+      send.disabled = true; send.textContent = "Mengunggah…"; err.textContent = "";
+      try {
+        const mk = await uploadMedia(blob, blob.type || "video/webm");
+        const rt = replyTo; setReply(null);
+        await addDoc(collection(db, "messages"), base("video", cap.value.trim(), null, rt, null, mk));
+        close();
+      } catch (e) { err.textContent = "Gagal mengirim: " + (e.message || friendlyError(e)); send.disabled = false; send.textContent = "Coba lagi"; }
+    };
+  }
+
+  // Video dari galeri: disunting dulu (pangkas, bisukan, crop), lalu dikecilkan sebelum diunggah.
+  async function previewVideo(file) {
+    let ed;
+    try { ed = await editVideo(file); } catch (e) { return toast(e.message || "Video tidak dapat dibuka.", "err"); }
+    if (!ed) return;
+    if (!ed.changed && file.size <= (ed.hd ? 40e6 : 6e6)) { // tidak diubah: kirim apa adanya (kualitas asli bila HD)
+      const e0 = h("div", { class: "error" }); const b0 = h("div", { class: "stack" }); const c0 = openSheet(ed.hd ? "Pratinjau video (HD)" : "Pratinjau video", b0);
+      return videoSendUI(b0, file, e0, c0, ed.hd ? 40e6 : 12e6);
+    }
+    const err = h("div", { class: "error" });
+    const prog = h("p", { class: "muted" }, "Menyiapkan video…");
+    const box = h("div", { class: "stack" }, h("div", { class: "spinner", style: "margin:auto" }), prog,
+      h("p", { class: "muted small" }, "Video diproses dan dikecilkan sebelum diunggah. Prosesnya berjalan seiring durasi, jangan tutup halaman."), err);
+    let cancelled = false; let close = () => {}; close = openSheet("Memproses video", box);
+    const watch = setInterval(() => { if (!box.isConnected) cancelled = true; }, 400);
+    try {
+      const blob = await processVideo(file, ed, (p) => { prog.textContent = `Memproses… ${p}%`; }, () => cancelled);
+      clearInterval(watch);
+      if (!blob || cancelled) return;
+      await videoSendUI(box, blob, err, close, ed.hd ? 40e6 : 12e6);
+    } catch (e) { clearInterval(watch); box.replaceChildren(h("p", { class: "error" }, e.message || "Gagal memproses video.")); }
+  }
+
+  async function recordVideo() {
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) return toast("Browser tidak mendukung rekam video. Gunakan Chrome.", "err");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 360 }, frameRate: { ideal: 24 } }, audio: true }); }
+    catch { return toast("Izin kamera/mikrofon ditolak.", "err"); }
+    const MAX = 60;
+    const stopStream = () => stream.getTracks().forEach((t) => t.stop());
+    const live = h("video", { autoplay: true, playsinline: true, style: "width:100%;border-radius:12px;background:#000" }); live.muted = true; live.srcObject = stream; live.style.transform = "scaleX(-1)";
+    const err = h("div", { class: "error" });
+    const btn = h("button", { class: "btn danger" }, "⏺ Mulai rekam");
+    const box = h("div", { class: "stack" }, live, h("p", { class: "muted small" }, `Rekam video maks. ${MAX} detik.`), btn, err);
+    let close = () => {}; close = openSheet("Rekam video", box);
+    const watch = setInterval(() => { if (!box.isConnected) { clearInterval(watch); stopStream(); } }, 500);
+    btn.onclick = () => {
+      const mime = ["video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((t) => MediaRecorder.isTypeSupported(t));
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 300000, audioBitsPerSecond: 32000 });
+      const chunks = []; let left = MAX;
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const tick = setInterval(() => { left--; btn.textContent = `⏹ Selesai (${left} dtk)`; if (left <= 0) rec.stop(); }, 1000);
+      rec.onstop = async () => {
+        clearInterval(tick); stopStream();
+        const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+        await videoSendUI(box, blob, err, close);
+      };
+      rec.start(); btn.textContent = `⏹ Selesai (${left} dtk)`; btn.onclick = () => rec.stop();
+    };
+  }
+
+  /* Izin kamera, mikrofon, notifikasi: browser hanya mengizinkan lewat ketukan pengguna, jadi ditampilkan satu tombol. */
+  async function permState() {
+    const r = { cam: "prompt", mic: "prompt", notif: "Notification" in window ? Notification.permission : "unsupported" };
+    try { r.cam = (await navigator.permissions.query({ name: "camera" })).state; } catch {}
+    try { r.mic = (await navigator.permissions.query({ name: "microphone" })).state; } catch {}
+    return r;
+  }
+  async function askPermissions() {
+    const st = await permState();
+    const missing = st.cam !== "granted" || st.mic !== "granted" || (st.notif !== "granted" && st.notif !== "unsupported");
+    if (!missing) return;
+    try { if (sessionStorage.getItem("sela-perm-asked")) return; sessionStorage.setItem("sela-perm-asked", "1"); } catch {}
+    const lines = h("div", { class: "stack" });
+    const paint = async () => {
+      const x = await permState();
+      const t = (v) => (v === "granted" ? "✅ aktif" : v === "denied" ? "⛔ diblokir" : "⚪ belum diizinkan");
+      lines.replaceChildren(h("div", {}, "📷 Kamera: ", t(x.cam)), h("div", {}, "🎤 Mikrofon: ", t(x.mic)), h("div", {}, "🔔 Notifikasi: ", x.notif === "unsupported" ? "tidak didukung browser ini" : t(x.notif === "default" ? "prompt" : x.notif)));
+      if (x.cam === "denied" || x.mic === "denied" || x.notif === "denied") lines.append(h("p", { class: "error small" }, "Yang diblokir harus diaktifkan manual: ketuk ikon gembok/pengaturan di samping alamat situs → Izin → pilih Izinkan, lalu muat ulang halaman."));
+      return x;
+    };
+    const btn = h("button", { class: "btn primary" }, "Izinkan semua");
+    let close = () => {};
+    close = openSheet("Aktifkan izin", h("div", { class: "stack" },
+      h("p", { class: "muted" }, "Agar panggilan suara/video, rekam video, dan notifikasi pesan berfungsi, izinkan akses berikut. Kamera dan mikrofon hanya aktif saat kamu memulai panggilan atau merekam, dan tidak pernah aktif diam-diam."),
+      lines, btn));
+    paint();
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { if ("Notification" in window && Notification.permission === "default") await Notification.requestPermission(); } catch {}
+      try { const s2 = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); s2.getTracks().forEach((t) => t.stop()); }
+      catch { try { const s3 = await navigator.mediaDevices.getUserMedia({ audio: true }); s3.getTracks().forEach((t) => t.stop()); } catch {} }
+      const x = await paint(); btn.disabled = false;
+      if (x.cam === "granted" && x.mic === "granted" && x.notif !== "default") { toast("Izin sudah aktif", "good"); close(); }
+    };
+  }
+
+  function openEmoji() {
+    const grid = h("div", { class: "emoji-grid" }, EMOJIS.map((e) => h("span", { onclick: () => { input.value += e; input.focus(); } }, e)));
+    openSheet("Emoji", grid);
+  }
+
+  function ticks(m, pending) {
+    if (pending) return "🕓";
+    const read = Object.keys(m.readBy || {}).some((k) => k !== m.senderUid);
+    return h("span", { class: "ticks" + (read ? " read" : "") }, read ? "✓✓" : "✓");
+  }
+
+  function msgNode(m) {
+    const me = m.senderUid === uid;
+    const b = h("div", { class: "bubble" + (crowns.has(m.senderUid) ? " crown" : "") });
+    if (m.replyTo) b.append(h("div", { class: "quote", onclick: (e) => { e.stopPropagation(); const t = list.querySelector('[data-mid="' + m.replyTo.id + '"]'); if (t) { t.scrollIntoView({ block: "center", behavior: "smooth" }); t.classList.add("flash"); setTimeout(() => t.classList.remove("flash"), 1200); } else toast("Pesan asli tidak ada di layar.") } }, h("b", {}, m.replyTo.name), ": ", String(m.replyTo.text || "").slice(0, 80)));
+    const mEl = mediaEl(m, { onOpen: () => viewImage(m) }); if (mEl) b.append(mEl);
+    if (m.text) b.append(h("div", {}, m.text));
+    b.append(h("div", { class: "meta" }, fmtTime(m.createdAt) || "…", " ", me ? ticks(m, m._pending) : ""));
+    const counts = {};
+    Object.values(m.reactions || {}).forEach((e) => (counts[e] = (counts[e] || 0) + 1));
+    const reacts = Object.keys(counts).length ? h("div", { class: "reacts" }, Object.entries(counts).map(([e, n]) => h("span", { class: "react" + (m.reactions?.[uid] === e ? " mine" : ""), onclick: () => react(m, e) }, e + " " + n))) : null;
+    const el = h("div", { class: "msg" + (me ? " me" : ""), "data-mid": m.id },
+      h("span", { class: "swipe-ic" }, "↩"),
+      me ? null : h("div", { class: "who", style: "display:flex;align-items:center;gap:6px", onclick: () => openProfile(m.senderUid) }, avatarEl(m.senderUid, false, 22), nameOf(m.senderUid)),
+      b, reacts);
+    gestures(el, m);
+    return el;
+  }
+  // Geser ke kanan = balas; tekan lama = menu (reaksi, balas, simpan, hapus milik sendiri).
+  function gestures(el, m) {
+    let sx = 0, sy = 0, dx = 0, lp = null, mode = null, fired = false;
+    const ic = el.querySelector(".swipe-ic");
+    const reset = () => { el.style.transition = "transform .15s"; el.style.transform = ""; ic.style.opacity = "0"; setTimeout(() => { el.style.transition = ""; }, 170); };
+    el.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) { clearTimeout(lp); return; }
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; dx = 0; mode = null; fired = false;
+      clearTimeout(lp); lp = setTimeout(() => { fired = true; mode = "lp"; try { navigator.vibrate?.(25); } catch {} msgMenu(m); }, 450);
+    }, { passive: true });
+    el.addEventListener("touchmove", (e) => {
+      if (mode === "lp") return;
+      const t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+      if (!mode && (Math.abs(mx) > 10 || Math.abs(my) > 10)) { clearTimeout(lp); mode = mx > 0 && Math.abs(mx) > Math.abs(my) * 1.5 ? "swipe" : "scroll"; }
+      if (mode === "swipe") { dx = Math.min(mx, 90); el.style.transform = `translateX(${dx}px)`; ic.style.opacity = String(Math.min(1, dx / 55)); }
+    }, { passive: true });
+    const end = () => {
+      clearTimeout(lp);
+      if (mode === "swipe") { if (dx >= 55) { setReply(m); try { navigator.vibrate?.(10); } catch {} input.focus(); } reset(); }
+      mode = null;
+    };
+    el.addEventListener("touchend", end); el.addEventListener("touchcancel", () => { clearTimeout(lp); if (mode === "swipe") reset(); mode = null; });
+    el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!("ontouchstart" in window)) msgMenu(m); });
+    el.addEventListener("click", (e) => { if (fired) { e.stopPropagation(); e.preventDefault(); fired = false; } }, true);
+  }
+
+  function msgMenu(m) {
+    let close;
+    const row = (t, fn, cls = "ghost") => h("button", { class: "btn " + cls, onclick: () => { close(); fn(); } }, t);
+    const hasMedia = !!(m.imageData || m.videoData || m.mediaKey);
+    close = openSheet("Pesan", h("div", { class: "stack" },
+      h("div", { class: "row wrap" }, REACTS.map((e) => h("button", { class: "icon-btn", onclick: () => { close(); react(m, e); } }, e))),
+      row("↩ Balas", () => { setReply(m); input.focus(); }),
+      canPin() ? row(pins.some((p) => p.id === m.id) ? "📌 Lepas sematan" : "📌 Sematkan untuk semua", async () => { if (pins.some((p) => p.id === m.id)) { try { await deleteDoc(doc(db, "pins", m.id)); toast("Sematan dilepas", "good"); } catch (e) { toast(friendlyError(e), "err"); } } else pinMsg(m); }) : null,
+      m.text ? row("📋 Salin teks", () => { try { navigator.clipboard.writeText(m.text); toast("Teks disalin", "good"); } catch { toast("Tidak bisa menyalin", "err"); } }) : null,
+      hasMedia ? row("💾 Simpan ke HP", async () => { try { await saveMedia(m); toast("Tersimpan ke unduhan", "good"); } catch (e) { toast("Gagal menyimpan: " + (e.message || e), "err"); } }) : null,
+      m.senderUid === uid ? row(hasMedia ? "🗑 Hapus media ini" : "🗑 Hapus pesan", async () => { if (!confirm("Hapus untuk semua anggota?")) return; try { await deleteDoc(doc(db, "messages", m.id)); } catch (e) { toast(friendlyError(e), "err"); } }, "danger") : null));
+  }
+  async function react(m, e) {
+    const mine = m.reactions?.[uid];
+    try { await updateDoc(doc(db, "messages", m.id), { ["reactions." + uid]: mine === e ? deleteField() : e }); } catch (er) { toast(friendlyError(er), "err"); }
+  }
+  function report(m) {
+    const reason = h("textarea", { class: "input", rows: "3", maxlength: "500", placeholder: "Alasan laporan (mis. pelecehan, spam)" });
+    const err = h("div", { class: "error" }); const btn = h("button", { class: "btn danger" }, "Kirim laporan");
+    const close = openSheet("Laporkan pesan", h("div", { class: "stack" }, h("p", { class: "muted" }, "Admin akan meninjau pesan ini sesuai kebijakan grup."), reason, btn, err));
+    btn.onclick = async () => {
+      if (reason.value.trim().length < 3) { err.textContent = "Tuliskan alasan."; return; }
+      btn.disabled = true;
+      try {
+        await addDoc(collection(db, "reports"), { reporterUid: uid, messageId: m.id, reason: reason.value.trim(), status: "open", createdAt: serverTimestamp(),
+          snapshot: { text: m.text || "", messageType: m.messageType, senderUid: m.senderUid, senderName: nameOf(m.senderUid) } });
+        close(); toast("Laporan terkirim ke admin.", "good");
+      } catch (e) { err.textContent = friendlyError(e); btn.disabled = false; }
+    };
+  }
+
+  function avatarEl(id, big, sz) {
+    const p = profiles[id]?.photoURL; const st = big ? "width:84px;height:84px;font-size:2rem;margin:auto" : sz ? `width:${sz}px;height:${sz}px;font-size:.7rem` : null;
+    return p ? h("img", { class: "avatar", src: p, alt: "", style: st }) : h("div", { class: "avatar", style: st }, initial(id));
+  }
+  function memberRow(m, onClick) {
+    const on = !!online[m.uid];
+    return h("div", { class: "list-item", onclick: onClick },
+      h("div", { style: "position:relative;flex:none" }, avatarEl(m.uid),
+        h("span", { style: "position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);background:" + (on ? "#16a34a" : "#9ca3af") })),
+      h("div", { class: "grow" }, h("b", {}, nameOf(m.uid) + (m.uid === uid ? " (kamu)" : "")), h("div", { class: "muted small" }, (m.role === "admin" ? "Admin · " : "") + (on ? "online" : "offline"))));
+  }
+  function openMembers() { openSheet("Anggota (" + members.length + ")", h("div", {}, h("div", { class: "list-item" }, h("div", { class: "avatar" }, "S"), h("div", { class: "grow" }, h("b", {}, "Sela"), h("div", { class: "muted small" }, "Admin · 083899891468")), h("span", { class: "badge" }, "Admin")), members.map((m) => memberRow(m, () => openProfile(m.uid))))); }
+  function openProfile(id) {
+    const m = members.find((x) => x.uid === id); const on = !!online[id];
+    const err = h("div", { class: "error" });
+    let closeSheet = () => {};
+    const own = id === uid ? ownEditor(() => closeSheet()) : null;
+    closeSheet = openSheet("Profil", h("div", { class: "stack", style: "text-align:center" },
+      avatarEl(id, true),
+      h("h2", {}, nameOf(id)), h("p", { class: "muted" }, (on ? "🟢 online" : "⚪ offline") + (m ? " · bergabung " + fmtDateTime(m.joinedAt) : "")),
+      own, err,
+      id !== uid ? h("div", { class: "row" },
+        h("button", { class: "btn ghost grow", onclick: () => call.startCall(id, false) }, "📞 Suara"),
+        h("button", { class: "btn primary grow", onclick: () => call.startCall(id, true) }, "🎥 Video")) : null));
+  }
+  function ownEditor(done) {
+    const e2 = h("div", { class: "error" });
+    const nm = h("input", { class: "input", maxlength: "40", value: baseName(uid) === "Anggota" ? "" : baseName(uid), placeholder: "Nama panggilan" });
+    let photo = null;
+    const pf = h("input", { type: "file", accept: "image/*", class: "hidden" });
+    const pv = h("button", { class: "btn ghost small" }, "📷 Ganti foto profil");
+    pv.onclick = () => pf.click();
+    pf.onchange = async () => {
+      const f = pf.files[0]; pf.value = ""; if (!f) return; e2.textContent = "";
+      try { photo = await compressImage(f, 192, 0.7, 50000); pv.textContent = "✓ Foto baru dipilih (tekan Simpan)"; } catch (er) { e2.textContent = er.message || "Foto tidak dapat diproses."; }
+    };
+    const sv = h("button", { class: "btn primary" }, "Simpan profil");
+    sv.onclick = async () => {
+      const n = nm.value.trim(); if (n.length < 2) { e2.textContent = "Nama minimal 2 huruf."; return; }
+      sv.disabled = true; sv.textContent = "Menyimpan…"; e2.textContent = "";
+      try {
+        await updateDoc(doc(db, "profiles", uid), { displayName: n, ...(photo ? { photoURL: photo } : {}), updatedAt: serverTimestamp() });
+        toast("Profil diperbarui", "good"); done();
+      } catch (er) { e2.textContent = friendlyError(er); sv.disabled = false; sv.textContent = "Simpan profil"; }
+    };
+    return h("div", { class: "stack", style: "text-align:left" }, h("label", { class: "muted small" }, "Ubah nama"), nm, pf, pv, sv, e2);
+  }
+  function openGroup() {
+    const big = g.photoURL ? h("img", { class: "avatar", src: g.photoURL, alt: "", style: "width:96px;height:96px;margin:auto" }) : h("div", { class: "avatar", style: "width:96px;height:96px;font-size:2.4rem;margin:auto" }, "S");
+    let close = () => {};
+    close = openSheet("Profil grup", h("div", { class: "stack", style: "text-align:center" },
+      big, h("h2", {}, g.name || "Grup Sela"),
+      g.description ? h("p", { class: "muted" }, g.description) : null,
+      h("p", { class: "muted" }, `${members.length} anggota · ${members.filter((m) => online[m.uid]).length} online`),
+      h("div", { class: "row" },
+        h("button", { class: "btn ghost grow", onclick: () => { close(); openMembers(); } }, "👥 Anggota"),
+        h("button", { class: "btn ghost grow", onclick: () => { close(); openGallery(); } }, "🖼 Galeri")),
+      h("p", { class: "muted small" }, "Admin Sela (083899891468) dapat meninjau foto/video yang dikirim ke grup dan dapat bergabung sebagai pemantau di panggilan; anggota selalu diberi tahu saat itu terjadi."),
+      g.rulesText ? h("details", { style: "text-align:left" }, h("summary", {}, "Aturan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null));
+  }
+  function openGallery() {
+    const imgs = lastDocs.filter((m) => m.imageData || m.videoData || m.mediaKey).reverse();
+    openSheet("Galeri foto & video", imgs.length
+      ? h("div", {}, h("div", { class: "gallery" }, imgs.map((m) => mediaEl(m, { tile: true, onOpen: () => viewImage(m) }))), h("p", { class: "muted small" }, "Menampilkan foto dari pesan-pesan terbaru."))
+      : h("p", { class: "muted" }, "Belum ada foto."));
+  }
+  function viewImage(m) { openViewer(m, { title: nameOf(m.senderUid), sub: fmtDateTime(m.createdAt) }); }
+  function openRooms() {
+    if (call.callId) return toast("Akhiri panggilan yang sedang berjalan dulu.", "err");
+    let data = {}; let close = () => {};
+    const cam = h("input", { type: "checkbox", checked: true });
+    const listEl = h("div", { class: "rooms-list" });
+    const paint = () => listEl.replaceChildren(...roomIds.map((id) => {
+      const f = freshMembers(data[id]); const full = f.length >= ROOM_CAP;
+      return h("div", { class: "list-item" },
+        h("div", { class: "grow" }, h("b", {}, "Room " + id.slice(1)),
+          h("div", { class: full ? "error small" : "muted small" }, full ? "Room ini sudah penuh (10/10). Silakan pindah ke Room lain." : `${f.length}/10 · ` + (f.length ? f.slice(0, 3).map((m) => nameOf(m.uid)).join(", ") + (f.length > 3 ? "…" : "") : "kosong"))),
+        h("button", { class: "btn " + (full ? "ghost" : "primary") + " small", disabled: full, onclick: () => { close(); rooms.join(id, cam.checked); } }, full ? "Penuh" : "Masuk"));
+    }));
+    const un = onSnapshot(collection(db, "rooms"), (sn) => { data = {}; sn.forEach((d) => (data[d.id] = d.data())); paint(); }, () => {});
+    close = openSheet("Room panggilan (1–10)", h("div", { class: "stack" },
+      h("label", { class: "checkrow" }, cam, "Masuk dengan kamera"),
+      h("p", { class: "muted small" }, "Satu room maksimal 10 orang. Kamu bisa masuk sendiri tanpa menunggu anggota lain. Jika banyak peserta, matikan kamera agar lancar."),
+      listEl));
+    paint();
+    const w = setInterval(() => { if (!listEl.isConnected) { clearInterval(w); un(); } }, 1000);
+  }
+  function pickPeer(video) {
+    const others = members.filter((m) => m.uid !== uid);
+    let close;
+    close = openSheet(video ? "Video call ke…" : "Telepon ke…", others.length ? h("div", {}, others.map((m) => memberRow(m, () => { close(); call.startCall(m.uid, video); }))) : h("p", { class: "muted" }, "Belum ada anggota lain."));
+  }
+
+  function renderMsgs() {
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 140;
+    list.replaceChildren(...lastDocs.map(msgNode));
+    if (nearBottom || firstLoad) list.scrollTop = list.scrollHeight;
+  }
+
+  // Pesan real-time (100 terbaru)
+  unsubs.push(onSnapshot(query(collection(db, "messages"), where("groupId", "==", GROUP_ID), orderBy("createdAt", "desc"), limit(40)), { includeMetadataChanges: true }, (snap) => {
+    lastDocs = snap.docs.map((d) => ({ id: d.id, ...d.data(), _pending: d.metadata.hasPendingWrites })).reverse();
+    if (!firstLoad) snap.docChanges().forEach((c) => {
+      const d = c.doc.data();
+      if (c.type === "added" && d.senderUid !== uid && !c.doc.metadata.hasPendingWrites) {
+        const body = d.text || (d.messageType === "image" ? "📷 Foto" : "🎥 Video");
+        if (document.hidden) { try { if (Notification.permission === "granted") new Notification(nameOf(d.senderUid), { body }); } catch {} }
+        else toast(nameOf(d.senderUid) + ": " + body.slice(0, 60));
+      }
+    });
+    renderMsgs(); firstLoad = false;
+    if (!document.hidden) lastDocs.forEach((m) => { if (m.senderUid !== uid && !m._pending && !(m.readBy || {})[uid]) updateDoc(doc(db, "messages", m.id), { ["readBy." + uid]: true }).catch(() => {}); });
+  }, (e) => toast("Pesan gagal dimuat: " + friendlyError(e), "err")));
+
+  setTimeout(askPermissions, 1500);
+
+  return {
+    node: h("div", { class: "chat" }, head, pinBar, list, replyBar, composer),
+    cleanup: () => { unsubs.forEach((f) => { try { f(); } catch {} }); call.destroy(); },
+  };
+}
+
+</script></body></html>

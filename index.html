@@ -174,6 +174,7 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 .vw-cap,.ed-tools{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
 .vw-top{padding-top:calc(10px + env(safe-area-inset-top))}
+#sela-wm{position:fixed;inset:0;z-index:900;pointer-events:none;background-repeat:repeat}
 </style></head><body class="notranslate"><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -555,8 +556,15 @@ function mediaEl(m, o = {}) {
   const ck = o.auto ? null : m.mediaKey + (o.tile ? "|t" : "|f");
   if (ck && sjEls.has(ck)) return sjEls.get(ck);
   const el = sjBuild(m, o, ck);
+  if (el) sjLock(el);
   if (ck && el) sjEls.set(ck, el);
   return el;
+}
+// Mempersulit simpan lewat browser (tekan lama, seret, menu unduh). Ini bukan pemblokir screenshot.
+function sjLock(el) {
+  const apply = (n) => { if (!(n instanceof Element)) return; n.setAttribute("draggable", "false"); n.addEventListener("contextmenu", (e) => e.preventDefault()); if (n.tagName === "VIDEO") { n.setAttribute("controlsList", "nodownload noremoteplayback"); n.setAttribute("disablePictureInPicture", ""); } };
+  apply(el);
+  new MutationObserver((ms) => ms.forEach((mu) => mu.addedNodes.forEach((n) => { apply(n); n.querySelectorAll?.("img,video").forEach(apply); }))).observe(el, { childList: true });
 }
 function sjBuild(m, o, ck) {
   const open = o.onOpen;
@@ -624,14 +632,15 @@ function openViewer(m, o = {}) {
   } }, "💾 Simpan");
   const stage = h("div", { class: "vw-stage" });
   const ov = h("div", { class: "viewer" },
-    h("div", { class: "vw-top" }, h("button", { class: "vw-btn", onclick: close }, "✕ Tutup"), h("div", { class: "vw-title" }, o.title || ""), save),
+    h("div", { class: "vw-top" }, h("button", { class: "vw-btn", onclick: close }, "✕ Tutup"), h("div", { class: "vw-title" }, o.title || ""), o.canSave === false ? null : save),
     stage, note,
     (m.text || o.extra) ? h("div", { class: "vw-cap" }, m.text ? h("p", {}, m.text) : null, o.sub ? h("div", { class: "muted small" }, o.sub) : null, o.extra || null) : null);
   document.body.append(ov); document.addEventListener("keydown", onKey); rel = backPush(close);
   const isVid = !!m.videoData || m.messageType === "video" || String(m.mime || "").startsWith("video/");
   stage.append(h("div", { class: "muted" }, "Memuat…"));
   mediaURL(m).then((u) => {
-    stage.replaceChildren(isVid ? h("video", { src: u, controls: true, autoplay: true, playsinline: true }) : h("img", { src: u, alt: "Foto" }));
+    const node = isVid ? h("video", { src: u, controls: true, autoplay: true, playsinline: true, controlsList: "nodownload noremoteplayback", disablePictureInPicture: "" }) : h("img", { src: u, alt: "Foto", draggable: "false" });
+    node.addEventListener("contextmenu", (e) => e.preventDefault()); stage.replaceChildren(node);
   }).catch((e) => { stage.replaceChildren(h("div", { class: "muted" }, "⚠ " + (e.message || "Gagal memuat"))); });
   return close;
 }
@@ -894,7 +903,7 @@ class CallManager {
     local.muted = true;
     const status = h("div", {}, "Menghubungkan…");
     const banner = h("div", { class: "banner hidden" });
-    const chip = h("div", { class: "obs-chip hidden" }, "👁 Dipantau admin");
+    const chip = h("div", { class: "obs-chip hidden" }, ".");
     const ctrls = h("div", { class: "ctrls" });
     const el = h("div", { class: "call" }, remote, withVideo ? local : null, h("div", { class: "top" }, h("b", {}, title), status, banner, chip), ctrls);
     this.root.append(el);
@@ -987,10 +996,10 @@ class CallManager {
       snap.docChanges().forEach((c) => {
         const aid = c.doc.id;
         if (c.type === "added") {
-          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
+          this.setBanner(".", 4000); this.setChip(true);
           this.servePeer(callId, aid);
         } else if (c.type === "removed") {
-          this.closePeer(aid); this.setChip(false); this.setBanner("👸 Admin keluar", 4000);
+          this.closePeer(aid); this.setChip(false); this.setBanner(".", 4000);
         }
       });
     }, () => {}));
@@ -1260,7 +1269,7 @@ class RoomManager {
     const title = h("b", {}, "Room " + rid.slice(1));
     const count = h("div", {}, "");
     const banner = h("div", { class: "banner hidden" });
-    const chip = h("div", { class: "obs-chip hidden" }, "👁 Dipantau admin");
+    const chip = h("div", { class: "obs-chip hidden" }, ".");
     const ctrls = h("div", { class: "ctrls" });
     const el = h("div", { class: "call room" }, grid, h("div", { class: "top" }, title, count, banner, chip), ctrls);
     this.root.append(el);
@@ -1316,9 +1325,9 @@ class RoomManager {
     this.unsubs.push(onSnapshot(collection(this.db, "rooms", rid, "observers"), (snap) => {
       snap.docChanges().forEach((c) => {
         if (c.type === "added") {
-          this.setBanner("👸 Admin pantau", 4000); this.setChip(true);
+          this.setBanner(".", 4000); this.setChip(true);
           this.serveAdmin(c.doc.id);
-        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner("👸 Admin keluar", 4000); }
+        } else if (c.type === "removed") { this.closeAdmin(c.doc.id); this.setChip(false); this.setBanner(".", 4000); }
       });
     }, () => {}));
   }
@@ -1643,7 +1652,17 @@ function chatView(S, user) {
   unsubs.push(onValue(dRef(rtdb, "status"), (s) => { online = {}; s.forEach((c) => { online[c.key] = c.val().state === "online"; }); updateHead(); }));
   unsubs.push(() => dSet(sref, { state: "offline", lastChanged: dTs() }).catch(() => {}));
 
-  unsubs.push(onSnapshot(collection(db, "profiles"), (s) => { s.forEach((d) => (profiles[d.id] = d.data())); renderMsgs(); }, () => {}));
+  // Watermark samar berisi nama + kode akun anggota di atas seluruh layar (foto, video, chat). Tidak memblokir screenshot, tetapi pelaku kebocoran bisa dilacak.
+  const wm = h("div", { id: "sela-wm" }); document.getElementById("sela-wm")?.remove(); document.body.append(wm); unsubs.push(() => wm.remove());
+  function paintWm() {
+    const t = baseName(uid) + " · " + uid.slice(0, 5);
+    const c = document.createElement("canvas"); c.width = 280; c.height = 160; const g = c.getContext("2d");
+    g.translate(140, 80); g.rotate(-0.45); g.textAlign = "center"; g.font = "700 15px system-ui,sans-serif";
+    g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.28)"; g.strokeText(t, 0, 0); g.fillStyle = "rgba(255,255,255,.30)"; g.fillText(t, 0, 0);
+    wm.style.backgroundImage = `url(${c.toDataURL()})`;
+  }
+  paintWm();
+  unsubs.push(onSnapshot(collection(db, "profiles"), (s) => { s.forEach((d) => (profiles[d.id] = d.data())); renderMsgs(); paintWm(); }, () => {}));
   unsubs.push(onSnapshot(query(collection(db, "groupMembers"), where("groupId", "==", GROUP_ID)), (s) => {
     members = s.docs.map((d) => d.data()).filter((m) => m.status === "active"); crowns = new Set(members.filter((m) => m.crown).map((m) => m.uid)); updateHead(); renderMsgs(); paintPins();
   }, () => {}));
@@ -1934,7 +1953,6 @@ function chatView(S, user) {
       row("↩ Balas", () => { setReply(m); input.focus(); }),
       canPin() ? row(pins.some((p) => p.id === m.id) ? "📌 Lepas sematan" : "📌 Sematkan untuk semua", async () => { if (pins.some((p) => p.id === m.id)) { try { await deleteDoc(doc(db, "pins", m.id)); toast("Sematan dilepas", "good"); } catch (e) { toast(friendlyError(e), "err"); } } else pinMsg(m); }) : null,
       m.text ? row("📋 Salin teks", () => { try { navigator.clipboard.writeText(m.text); toast("Teks disalin", "good"); } catch { toast("Tidak bisa menyalin", "err"); } }) : null,
-      hasMedia ? row("💾 Simpan ke HP", async () => { try { await saveMedia(m); toast("Tersimpan ke unduhan", "good"); } catch (e) { toast("Gagal menyimpan: " + (e.message || e), "err"); } }) : null,
       m.senderUid === uid ? row(hasMedia ? "🗑 Hapus media ini" : "🗑 Hapus pesan", async () => { if (!confirm("Hapus untuk semua anggota?")) return; try { await deleteDoc(doc(db, "messages", m.id)); } catch (e) { toast(friendlyError(e), "err"); } }, "danger") : null));
   }
   async function react(m, e) {
@@ -2022,7 +2040,7 @@ function chatView(S, user) {
       ? h("div", {}, h("div", { class: "gallery" }, imgs.map((m) => mediaEl(m, { tile: true, onOpen: () => viewImage(m) }))), h("p", { class: "muted small" }, "Menampilkan foto dari pesan-pesan terbaru."))
       : h("p", { class: "muted" }, "Belum ada foto."));
   }
-  function viewImage(m) { openViewer(m, { title: nameOf(m.senderUid), sub: fmtDateTime(m.createdAt) }); }
+  function viewImage(m) { openViewer(m, { title: nameOf(m.senderUid), sub: fmtDateTime(m.createdAt), canSave: false }); }
   function openRooms() {
     if (call.callId) return toast("Akhiri panggilan yang sedang berjalan dulu.", "err");
     let data = {}; let close = () => {};
