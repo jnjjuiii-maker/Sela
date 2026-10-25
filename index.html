@@ -174,7 +174,6 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 .sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 .vw-cap,.ed-tools{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
 .vw-top{padding-top:calc(10px + env(safe-area-inset-top))}
-#sela-wm{position:fixed;inset:0;z-index:900;pointer-events:none;background-repeat:repeat}
 </style></head><body class="notranslate"><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1652,17 +1651,7 @@ function chatView(S, user) {
   unsubs.push(onValue(dRef(rtdb, "status"), (s) => { online = {}; s.forEach((c) => { online[c.key] = c.val().state === "online"; }); updateHead(); }));
   unsubs.push(() => dSet(sref, { state: "offline", lastChanged: dTs() }).catch(() => {}));
 
-  // Watermark samar berisi nama + kode akun anggota di atas seluruh layar (foto, video, chat). Tidak memblokir screenshot, tetapi pelaku kebocoran bisa dilacak.
-  const wm = h("div", { id: "sela-wm" }); document.getElementById("sela-wm")?.remove(); document.body.append(wm); unsubs.push(() => wm.remove());
-  function paintWm() {
-    const t = baseName(uid) + " · " + uid.slice(0, 5);
-    const c = document.createElement("canvas"); c.width = 280; c.height = 160; const g = c.getContext("2d");
-    g.translate(140, 80); g.rotate(-0.45); g.textAlign = "center"; g.font = "700 15px system-ui,sans-serif";
-    g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.28)"; g.strokeText(t, 0, 0); g.fillStyle = "rgba(255,255,255,.30)"; g.fillText(t, 0, 0);
-    wm.style.backgroundImage = `url(${c.toDataURL()})`;
-  }
-  paintWm();
-  unsubs.push(onSnapshot(collection(db, "profiles"), (s) => { s.forEach((d) => (profiles[d.id] = d.data())); renderMsgs(); paintWm(); }, () => {}));
+  unsubs.push(onSnapshot(collection(db, "profiles"), (s) => { s.forEach((d) => (profiles[d.id] = d.data())); renderMsgs(); }, () => {}));
   unsubs.push(onSnapshot(query(collection(db, "groupMembers"), where("groupId", "==", GROUP_ID)), (s) => {
     members = s.docs.map((d) => d.data()).filter((m) => m.status === "active"); crowns = new Set(members.filter((m) => m.crown).map((m) => m.uid)); updateHead(); renderMsgs(); paintPins();
   }, () => {}));
