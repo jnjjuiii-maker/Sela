@@ -177,7 +177,7 @@ progress{width:100%;height:10px;accent-color:var(--primary)}
 </style></head><body class="notranslate"><div id="app"></div>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInAnonymously, GoogleAuthProvider, signInWithPopup, browserPopupRedirectResolver, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, addDoc, updateDoc, onSnapshot, collection, query, where, serverTimestamp, setDoc, runTransaction, deleteField, getDocFromServer, deleteDoc, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getDatabase, ref as dRef, onValue, set as dSet, onDisconnect, serverTimestamp as dTs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 /* ---- firebase-config.js ---- */
@@ -321,7 +321,8 @@ function friendlyError(e) {
     "auth/quota-exceeded": "Kuota SMS Firebase habis. Coba lagi nanti atau hubungi admin.",
     "auth/network-request-failed": "Koneksi internet bermasalah.",
     "auth/captcha-check-failed": "Verifikasi reCAPTCHA gagal. Muat ulang halaman.",
-    "auth/operation-not-allowed": "Metode login ini belum diaktifkan di Firebase Console.",
+    "auth/operation-not-allowed": "Pendaftaran anonim belum diaktifkan. Admin: Firebase → Authentication → Sign-in method → Anonymous → Enable.",
+    "auth/admin-restricted-operation": "Pendaftaran anonim belum diaktifkan. Admin: Firebase → Authentication → Sign-in method → Anonymous → Enable.",
     "auth/popup-closed-by-user": "Jendela login Google ditutup sebelum selesai. Coba lagi.",
     "auth/cancelled-popup-request": "Login dibatalkan. Coba lagi.",
     "auth/popup-blocked": "Pop-up login diblokir browser. Izinkan pop-up untuk situs ini lalu coba lagi.",
@@ -422,20 +423,20 @@ function loginView(title = "Sela Group Chat", subtitle = "Masuk dengan nomor tel
 }
 
 /* ---------- Login Google (aplikasi anggota) ---------- */
-function googleLoginView(title = "Sela Group Chat", subtitle = "Masuk dengan akun Google") {
+// Tanpa login: tiap pendaftar otomatis mendapat ID acak unik dari Firebase (anonim), tersimpan di browser ini.
+function joinView(title = "Sela Group Chat") {
   const err = h("div", { class: "error", role: "alert" });
-  const btn = h("button", { class: "btn primary" }, "Masuk dengan Google");
+  const btn = h("button", { class: "btn primary" }, "GABUNG GRUP");
   btn.onclick = async () => {
-    err.textContent = ""; btn.disabled = true; btn.textContent = "Membuka Google…";
-    try {
-      const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, prov);
-    } catch (e) { err.textContent = friendlyError(e); btn.disabled = false; btn.textContent = "Masuk dengan Google"; }
+    err.textContent = ""; btn.disabled = true; btn.textContent = "Membuat ID anggota…";
+    try { await signInAnonymously(auth); }
+    catch (e) { err.textContent = friendlyError(e); btn.disabled = false; btn.textContent = "GABUNG GRUP"; }
   };
   return h("div", { class: "screen center" }, h("div", { class: "card stack login" },
-    h("div", { class: "logo" }, "S"), h("h1", {}, title), h("p", { class: "muted" }, subtitle),
+    h("div", { class: "logo" }, "S"), h("h1", {}, title),
+    h("p", { class: "muted" }, "Tekan Gabung Grup. Kamu otomatis mendapat ID anggota acak yang unik, lalu lanjut ke verifikasi suara dan persetujuan admin."),
     btn, err,
-    h("p", { class: "muted small" }, "Buka lewat Chrome (bukan browser di dalam WhatsApp atau aplikasi lain) agar login Google berfungsi."),
+    h("p", { class: "muted small" }, "ID tersimpan di browser ini. Jangan hapus data situs Chrome dan pakai browser yang sama, kalau tidak kamu harus mendaftar ulang."),
     h("button", { class: "btn ghost small", onclick: toggleTheme }, "🌓 Mode gelap/terang")));
 }
 
@@ -1388,7 +1389,7 @@ let cleanups = [];
 const clean = () => { cleanups.forEach((f) => { try { f(); } catch {} }); cleanups = []; };
 
 if (!configured) showConfigHelp(root, "Sela Group Chat");
-else onAuthStateChanged(auth, (u) => { clean(); if (u) boot(u); else mount(root, googleLoginView()); });
+else onAuthStateChanged(auth, (u) => { clean(); if (u) boot(u); else mount(root, joinView()); });
 
 /* ======================= ALUR UTAMA ======================= */
 async function boot(user) {
@@ -1974,7 +1975,7 @@ function chatView(S, user) {
         h("span", { style: "position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--card);background:" + (on ? "#16a34a" : "#9ca3af") })),
       h("div", { class: "grow" }, h("b", {}, nameOf(m.uid) + (m.uid === uid ? " (kamu)" : "")), h("div", { class: "muted small" }, (m.role === "admin" ? "Admin · " : "") + (on ? "online" : "offline"))));
   }
-  function openMembers() { openSheet("Anggota (" + members.length + ")", h("div", {}, h("div", { class: "list-item" }, h("div", { class: "avatar" }, "S"), h("div", { class: "grow" }, h("b", {}, "Sela"), h("div", { class: "muted small" }, "Admin · 083899891468")), h("span", { class: "badge" }, "Admin")), members.map((m) => memberRow(m, () => openProfile(m.uid))))); }
+  function openMembers() { openSheet("Anggota (" + members.length + ")", h("div", {}, h("div", { class: "list-item" }, h("div", { class: "avatar" }, "S"), h("div", { class: "grow" }, h("b", {}, "Sela"), h("div", { class: "muted small" }, "ser")), h("span", { class: "badge" }, "Admin")), members.map((m) => memberRow(m, () => openProfile(m.uid))))); }
   function openProfile(id) {
     const m = members.find((x) => x.uid === id); const on = !!online[id];
     const err = h("div", { class: "error" });
@@ -2008,7 +2009,7 @@ function chatView(S, user) {
         toast("Profil diperbarui", "good"); done();
       } catch (er) { e2.textContent = friendlyError(er); sv.disabled = false; sv.textContent = "Simpan profil"; }
     };
-    return h("div", { class: "stack", style: "text-align:left" }, h("label", { class: "muted small" }, "Ubah nama"), nm, pf, pv, sv, e2);
+    return h("div", { class: "stack", style: "text-align:left" }, h("label", { class: "muted small" }, "Ubah nama"), nm, pf, pv, sv, e2, h("p", { class: "muted small" }, "ID anggota: " + uid.slice(0, 8)));
   }
   function openGroup() {
     const big = g.photoURL ? h("img", { class: "avatar", src: g.photoURL, alt: "", style: "width:96px;height:96px;margin:auto" }) : h("div", { class: "avatar", style: "width:96px;height:96px;font-size:2.4rem;margin:auto" }, "S");
@@ -2020,7 +2021,7 @@ function chatView(S, user) {
       h("div", { class: "row" },
         h("button", { class: "btn ghost grow", onclick: () => { close(); openMembers(); } }, "👥 Anggota"),
         h("button", { class: "btn ghost grow", onclick: () => { close(); openGallery(); } }, "🖼 Galeri")),
-      h("p", { class: "muted small" }, "Admin Sela (083899891468) dapat meninjau foto/video yang dikirim ke grup dan dapat bergabung sebagai pemantau di panggilan; anggota selalu diberi tahu saat itu terjadi."),
+      h("p", { class: "muted small" }, "privasi aman yah kalo tambah aman langsung vc aja"),
       g.rulesText ? h("details", { style: "text-align:left" }, h("summary", {}, "Aturan grup"), h("p", { class: "muted", style: "white-space:pre-wrap" }, g.rulesText)) : null));
   }
   function openGallery() {
